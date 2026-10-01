@@ -85,7 +85,7 @@ Handlers receive `env` with the override applied, and so does `process.env` unde
 | `swp check --branch <b> [--isolated]` | Fail unless the Preview serves the right database; fail at once on production                                             |
 | `swp down --branch <b>`               | Delete the Preview and its own database                                                                                   |
 | `swp pr`                              | Inside a `pull_request` workflow: `down` on close, else `up` when needed, then `check`                                    |
-| `swp prune [--repo <r>] [--yes]`      | List Supabase branches and Previews whose git branch has no open PR; delete them with `--yes`                             |
+| `swp prune [--repo <r>] [--yes]`      | List leftovers (git branch deleted, or its PR closed) and delete them with `--yes`                                        |
 
 Every command takes `--dry-run`, and `--env-file <path>` (default `.env.swp` when present). `swp.config.json`:
 

@@ -20,7 +20,7 @@ const USAGE = `swp: branch previews for Cloudflare Workers on Supabase branching
   swp check [--branch <b>] [--pr <n>] [--isolated]    fail unless the Preview serves the right database
   swp down  [--branch <b>] [--pr <n>]                 delete the Preview and its own database
   swp pr                                              all of the above for a pull_request workflow
-  swp prune [--repo <owner/name>] [--yes]             list (or delete) branches and Previews with no open PR
+  swp prune [--repo <owner/name>] [--yes]             list (or delete) leftovers of deleted branches and closed PRs
 
 Flags: --dry-run, --env-file <path>, --worker <name>, --project-ref <ref>, --trunk <branch>
 Env:   SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (and GITHUB_TOKEN for pr and prune)`;

@@ -141,6 +141,19 @@ function deps(supabase: SupabaseApi, cloudflare: CloudflareApi, extra: Partial<D
 }
 
 describe("up", () => {
+  it("waits for the Preview's first deployment before setting the override", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const previews = [record("feat/x", false)];
+    const c = fakeCloudflare(previews);
+    let waits = 0;
+    const sleep = async () => {
+      if (++waits === 2) previews[0] = record("feat/x");
+    };
+    await up("feat/x", deps(s.supabase, c.cloudflare, { sleep }));
+    expect(waits).toBeGreaterThanOrEqual(2);
+    expect(c.calls.preview.map((p) => p.name)).toEqual(["feat/x"]);
+  });
+
   it("asks Supabase for a branch tied to the git branch and gives the Preview one override secret", async () => {
     const s = fakeSupabase([main, sharedBranch]);
     const c = fakeCloudflare();
@@ -330,6 +343,17 @@ describe("release", () => {
     await release("feat/x", deps(s.supabase, c.cloudflare));
     expect(c.calls.secretsDeleted).toEqual([]);
     expect(s.log.deleted).toEqual([]);
+  });
+
+  it("skips a Preview that has no deployment yet, which wrangler cannot list secrets for", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const c = fakeCloudflare([record("feat/x", false)], withOverride);
+    const cf = c.cloudflare as unknown as { listPreviewSecrets: () => string[] };
+    cf.listPreviewSecrets = () => {
+      throw new Error('There are currently no deployments for the Preview "feat/x"');
+    };
+    await release("feat/x", deps(s.supabase, c.cloudflare));
+    expect(c.calls.secretsDeleted).toEqual([]);
   });
 
   it("only prints in a dry run", async () => {

@@ -24,6 +24,7 @@ Observed on real Cloudflare and Supabase Pro accounts in September 2026, with wr
 
 - Need wrangler 4.135 or later and a `previews` block in the wrangler config.
 - Workers Builds names a Preview after the raw git branch (`feat/x`); Cloudflare derives the slug (`feat-x`) and the URL `https://feat-x-<worker>.<subdomain>.workers.dev`. `swp` reads both from `GET /accounts/{id}/workers/workers/{worker}/previews` rather than guessing.
+- Workers Builds creates a Preview record before its first deployment, and until one exists `wrangler preview secret list` fails with "There are currently no deployments for the Preview". `swp` waits for `deployed_on` before touching a Preview's secrets.
 - A Preview build can fail on wrangler's first API call with Cloudflare code 10013 ("unknown error") after Workers Builds has already created the Preview record, leaving `deployed_on: null`. A rebuild with the same command succeeded.
 - Some framework entries call the Worker's `fetch` without `env` (TanStack Start on Nitro), so the runtime falls back to `process.env`.
 - By default a request that matches a static asset is served without running the Worker, so HTML in the assets directory gets no injected Supabase config. Set `assets.run_worker_first`.

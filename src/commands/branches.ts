@@ -159,7 +159,9 @@ export async function up(gitBranch: string, deps: Deps, pr?: number): Promise<st
  */
 export async function release(gitBranch: string, deps: Deps, pr?: number): Promise<void> {
   const { config, runner } = deps;
-  const preview = await deps.cloudflare.findPreview(previewKey(gitBranch, config, pr));
+  const found = await deps.cloudflare.findPreview(previewKey(gitBranch, config, pr));
+  // Workers Builds creates the record before the first deploy, and wrangler cannot list secrets until one exists.
+  const preview = found?.deployed_on ? found : undefined;
   if (preview && runner.dryRun) runner.log(`  remove ${OVERRIDE_SECRET} from Preview ${preview.name} if set`);
   else if (preview && deps.cloudflare.listPreviewSecrets(preview.name).includes(OVERRIDE_SECRET)) {
     deps.cloudflare.deletePreviewSecret(preview.name, OVERRIDE_SECRET);
@@ -259,11 +261,11 @@ export async function down(gitBranch: string, deps: Deps, pr?: number): Promise<
 async function waitForPreview(name: string, deps: Deps): Promise<PreviewRecord> {
   for (let attempt = 1; attempt <= 30; attempt += 1) {
     const preview = await deps.cloudflare.findPreview(name);
-    if (preview) return preview;
-    deps.runner.log(`  waiting for the Preview ${name} to exist (${attempt})`);
+    if (preview?.deployed_on) return preview;
+    deps.runner.log(`  waiting for the Preview ${name} to be deployed (${attempt})`);
     await deps.sleep(20_000);
   }
-  throw new Error(`No Preview ${name} appeared; is a Preview being deployed for it?`);
+  throw new Error(`No deployed Preview ${name} appeared; is a Preview being deployed for it?`);
 }
 
 function previewUrlOf(preview: PreviewRecord): string {

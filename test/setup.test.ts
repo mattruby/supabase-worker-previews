@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadConfig, type Config } from "../src/config.js";
-import { checkLocal, compareVersions, hasDefaultPrivileges } from "../src/commands/doctor.js";
+import { checkLocal, checkRemote, compareVersions, hasDefaultPrivileges } from "../src/commands/doctor.js";
+import type { ActionRun, Branch, SupabaseApi } from "../src/supabase.js";
 import { init, timestampBefore } from "../src/commands/init.js";
 import { needsIsolatedDb, type PullRequestEvent } from "../src/commands/pr.js";
 import { parseJsonc } from "../src/jsonc.js";
@@ -204,6 +205,54 @@ SUPABASE_OVERRIDE = "{}"
     expect(compareVersions("4.135.0", [4, 135, 0])).toBe(0);
     expect(compareVersions("4.99.9", [4, 135, 0])).toBeLessThan(0);
     expect(compareVersions("5.0.0-beta.1", [4, 135, 0])).toBeGreaterThan(0);
+  });
+});
+
+describe("doctor online", () => {
+  const config = loadConfig(
+    { worker: "app", supabaseProjectRef: PARENT },
+    mkdtempSync(join(tmpdir(), "swp-")),
+  );
+  const branches: Branch[] = [
+    { id: "0", name: "main", project_ref: PARENT, is_default: true, git_branch: "", status: "" },
+    {
+      id: "1",
+      name: "preview",
+      project_ref: "sharedrefsharedref00",
+      git_branch: "main",
+      persistent: true,
+      status: "",
+    },
+  ];
+  const run = (git: ActionRun["git_config"]): ActionRun => ({ id: "r", git_config: git, created_at: "" });
+  const remote = (runs: ActionRun[] | Error) =>
+    checkRemote(
+      config,
+      {
+        getProject: async () => ({}),
+        listBranches: async () => branches,
+        actionRuns: async (ref: string) => {
+          if (ref === PARENT) throw new Error("asked the production project");
+          if (runs instanceof Error) throw runs;
+          return runs;
+        },
+      } as unknown as SupabaseApi,
+      mkdtempSync(join(tmpdir(), "swp-")),
+    ).then((out) => out.map((f) => `${f.level}: ${f.message}`).join("\n"));
+
+  it("names the repo when a branch run came from GitHub", async () => {
+    const out = await remote([run({ owner: "acme", repo: "app", ref: "main" }), run(null)]);
+    expect(out).toMatch(/ok: Supabase builds "preview" from GitHub acme\/app/);
+  });
+
+  it("warns, saying what it cannot know, when no run came from GitHub", async () => {
+    const out = await remote([run(null), run(null)]);
+    expect(out).toMatch(/warn: cannot confirm the Supabase GitHub integration: none of the 2 runs/);
+    expect(out).toMatch(/signed-in reads 403/);
+  });
+
+  it("warns when the runs cannot be read", async () => {
+    expect(await remote(new Error("403"))).toMatch(/warn: cannot confirm .*no runs/);
   });
 });
 

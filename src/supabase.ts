@@ -18,6 +18,12 @@ export type ApiKey = {
   type?: "legacy" | "publishable" | "secret" | null;
   api_key?: string | null;
 };
+export type ActionRun = {
+  id: string;
+  git_config?: { owner?: string; repo?: string; ref?: string } | null;
+  created_at: string;
+};
+
 export class SupabaseApiError extends Error {
   constructor(
     readonly method: string,
@@ -111,6 +117,11 @@ export class SupabaseApi {
       () => null,
     );
     return status?.enabled !== false;
+  }
+
+  /** Newest first. Runs the GitHub integration made carry `git_config`. */
+  async actionRuns(branchRef: string): Promise<ActionRun[]> {
+    return (await this.call<ActionRun[]>("GET", `/projects/${branchRef}/actions`)) ?? [];
   }
 
   getAuthConfig(ref: string): Promise<{ site_url?: string; uri_allow_list?: string }> {

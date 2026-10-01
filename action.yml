@@ -17,7 +17,7 @@ inputs:
     default: "."
   version:
     description: Exact supabase-worker-previews version to run when the project does not install it. Defaults to the version this action was released with.
-    default: "0.2.0"
+    default: "0.3.0"
   github-token:
     description: Token for the PR comment and the GitHub deployment.
     default: ${{ github.token }}

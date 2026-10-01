@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -335,6 +343,27 @@ describe("doctor online", () => {
 });
 
 describe("init", () => {
+  it("never writes through a dangling symlink", () => {
+    const dir = project({ "wrangler.jsonc": wrangler(null) });
+    const outside = mkdtempSync(join(tmpdir(), "outside-"));
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    symlinkSync(join(outside, "config.json"), join(dir, "supabase-worker-previews.json"));
+    symlinkSync(join(outside, "workflow.yml"), join(dir, ".github/workflows/supabase-previews.yml"));
+    init({ supabaseProjectRef: PARENT, log: () => {} }, dir);
+    expect(existsSync(join(outside, "config.json"))).toBe(false);
+    expect(existsSync(join(outside, "workflow.yml"))).toBe(false);
+  });
+
+  it("refuses to write into a directory that is a symlink out of the project", () => {
+    const dir = project({ "wrangler.jsonc": wrangler(null) });
+    const outside = mkdtempSync(join(tmpdir(), "outside-"));
+    symlinkSync(outside, join(dir, ".github"));
+    expect(() => init({ supabaseProjectRef: PARENT, log: () => {} }, dir)).toThrow(
+      /outside .* through a symlink/,
+    );
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
   it("leaves a legacy swp.config.json alone instead of writing a second config", () => {
     const dir = project({
       "wrangler.jsonc": wrangler(null),

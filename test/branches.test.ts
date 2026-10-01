@@ -215,6 +215,20 @@ describe("shared", () => {
     expect(s.log.created).toEqual([{ name: "preview", gitBranch: "main", persistent: true }]);
   });
 
+  it("refuses a sharedBranch that names the production branch before writing anything", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const c = fakeCloudflare();
+    const d = deps(s.supabase, c.cloudflare, { config: { ...config, sharedBranch: "main" } });
+    await expect(shared(d)).rejects.toThrow(/production project/);
+    expect(s.log.updated).toEqual([]);
+    expect(s.log.created).toEqual([]);
+    const dry = deps(s.supabase, c.cloudflare, {
+      config: { ...config, sharedBranch: "main" },
+      runner: { ...quietRunner, dryRun: true },
+    });
+    await expect(shared(dry)).rejects.toThrow(/production project/);
+  });
+
   it("refuses a project without branching instead of creating its first branch", async () => {
     const s = fakeSupabase([]);
     await expect(shared(deps(s.supabase, fakeCloudflare().cloudflare))).rejects.toThrow(

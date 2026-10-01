@@ -77,10 +77,10 @@ export async function shared(deps: Deps): Promise<string> {
   const parent = config.supabaseProjectRef;
   runner.log(`Shared Preview database "${config.sharedBranch}" on ${parent}, tracking ${config.trunk}`);
   const branches = await supabase.listBranches(parent);
+  const existing = branches.find((b) => b.name === config.sharedBranch);
+  if (existing) assertIsolated(existing, parent);
   if (runner.dryRun) {
-    runner.log(
-      `  ${branches.some((b) => b.name === config.sharedBranch) ? "update" : "create"} the persistent branch`,
-    );
+    runner.log(`  ${existing ? "update" : "create"} the persistent branch`);
     return `<${config.sharedBranch}>`;
   }
   if (!branches.some((b) => b.is_default))
@@ -88,7 +88,7 @@ export async function shared(deps: Deps): Promise<string> {
       `Branching is not enabled on ${parent}. Connect the repo in the Supabase dashboard ` +
         "(project settings, Integrations, GitHub, automatic branching on), then run supabase-worker-previews shared again.",
     );
-  let branch = branches.find((b) => b.name === config.sharedBranch);
+  let branch = existing;
   if (!branch) {
     branch = await supabase.createBranch(parent, {
       name: config.sharedBranch,

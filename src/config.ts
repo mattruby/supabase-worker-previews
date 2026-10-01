@@ -25,6 +25,8 @@ export type Config = {
   prComment?: boolean;
   /** `swp pr` records a GitHub deployment for the PR head. Default true. */
   githubDeployments?: boolean;
+  /** GitHub environment of those deployments, shared by every PR; `{branch}` makes one per branch. Default "Preview". */
+  deploymentEnvironment?: string;
 };
 
 export type WranglerConfig = { file: string; json: Record<string, unknown> | null; name?: string };

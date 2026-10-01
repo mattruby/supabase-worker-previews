@@ -1,8 +1,9 @@
 import { branchFor, type Deps } from "./commands/branches.js";
 import type { PullRequestEvent } from "./commands/pr.js";
-import { GitHubApi } from "./github.js";
+import { GitHubApi, type Deployment } from "./github.js";
 
 export const COMMENT_MARKER = "<!-- supabase-worker-previews -->";
+const PAYLOAD_KEY = "swpPullRequest";
 
 export type Database = { kind: "shared" | "own"; name: string; ref?: string };
 
@@ -104,7 +105,7 @@ export class Feedback {
     this.deploymentsOn = deps.config.githubDeployments !== false && !deps.runner.dryRun;
     this.branch = event.pull_request.head.ref;
     this.sha = event.pull_request.head.sha;
-    this.environment = `Preview: ${this.branch}`;
+    this.environment = (deps.config.deploymentEnvironment ?? "Preview").replaceAll("{branch}", this.branch);
     this.server = env.GITHUB_SERVER_URL ?? "https://github.com";
     if (env.GITHUB_RUN_ID)
       this.runUrl = `${this.server}/${event.repository.full_name}/actions/runs/${env.GITHUB_RUN_ID}`;
@@ -208,6 +209,7 @@ export class Feedback {
         sha: this.sha,
         environment: this.environment,
         description: `Worker Preview of ${this.branch}`,
+        payload: { [PAYLOAD_KEY]: this.event.number },
       });
       await this.github.setDeploymentStatus(id, { state: "in_progress", logUrl: this.runUrl });
     });
@@ -225,12 +227,16 @@ export class Feedback {
     );
   }
 
-  /** Transient deployments are never marked inactive automatically, so older ones are retired here. */
+  /**
+   * Transient deployments are never marked inactive automatically, so this PR's
+   * older ones are retired here. Other PRs share the environment.
+   */
   private async deactivateDeployments(keep?: number): Promise<void> {
     if (!this.deploymentsOn) return;
     await this.safe("GitHub deployment cleanup", async () => {
-      for (const id of await this.github.listDeployments(this.environment)) {
-        if (id === keep || (await this.github.isInactive(id))) continue;
+      for (const { id, payload } of await this.github.listDeployments(this.environment)) {
+        if (id === keep || pullRequestOf(payload) !== this.event.number) continue;
+        if (await this.github.isInactive(id)) continue;
         await this.github.setDeploymentStatus(id, { state: "inactive" });
       }
     });
@@ -245,4 +251,18 @@ export class Feedback {
       return false;
     }
   }
+}
+
+/** GitHub may hand back a deployment payload as a JSON string. */
+function pullRequestOf(payload: Deployment["payload"]): number | undefined {
+  let value = payload;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  const pr = (value as Record<string, unknown> | null | undefined)?.[PAYLOAD_KEY];
+  return typeof pr === "number" ? pr : undefined;
 }

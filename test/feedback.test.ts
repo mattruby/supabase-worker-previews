@@ -28,10 +28,15 @@ const branches: Branch[] = [
 ];
 const ownBranch: Branch = { id: "2", name: "feat/x", project_ref: OWN, git_branch: "feat/x", status: "" };
 
-const event = (action = "synchronize", labels: string[] = []): PullRequestEvent => ({
+const event = (
+  action = "synchronize",
+  labels: string[] = [],
+  number = 7,
+  ref = "feat/x",
+): PullRequestEvent => ({
   action,
-  number: 7,
-  pull_request: { head: { ref: "feat/x", sha: SHA }, labels: labels.map((name) => ({ name })) },
+  number,
+  pull_request: { head: { ref, sha: SHA }, labels: labels.map((name) => ({ name })) },
   repository: { full_name: "o/r" },
 });
 
@@ -42,7 +47,7 @@ function fakeGitHub(
   opts: { comments?: { id: number; body: string }[]; fail?: number; files?: string[] } = {},
 ) {
   const comments = [...(opts.comments ?? [])];
-  const deployments: { id: number; environment: string; states: string[] }[] = [];
+  const deployments: { id: number; environment: string; payload: unknown; states: string[] }[] = [];
   const calls: Call[] = [];
   const fetchImpl = (async (input: string, init?: RequestInit) => {
     const url = new URL(input);
@@ -55,8 +60,8 @@ function fakeGitHub(
     if (opts.fail)
       return new Response('{"message":"Resource not accessible by integration"}', { status: opts.fail });
     let m: RegExpExecArray | null;
-    if (method === "GET" && path === "/issues/7/comments") return Response.json(comments);
-    if (method === "POST" && path === "/issues/7/comments") {
+    if (method === "GET" && /^\/issues\/\d+\/comments$/.test(path)) return Response.json(comments);
+    if (method === "POST" && /^\/issues\/\d+\/comments$/.test(path)) {
       const comment = { id: 100 + comments.length, body: body!.body as string };
       comments.push(comment);
       return Response.json(comment, { status: 201 });
@@ -70,6 +75,7 @@ function fakeGitHub(
       const deployment = {
         id: 500 + deployments.length,
         environment: body!.environment as string,
+        payload: body!.payload,
         states: [],
       };
       deployments.unshift(deployment);
@@ -222,7 +228,8 @@ describe("Feedback deployment", () => {
     const created = gh.writes().filter((c) => c.path === "/deployments");
     expect(created[0]!.body).toEqual({
       ref: SHA,
-      environment: "Preview: feat/x",
+      environment: "Preview",
+      payload: { swpPullRequest: 7 },
       description: "Worker Preview of feat/x",
       auto_merge: false,
       required_contexts: [],
@@ -242,6 +249,43 @@ describe("Feedback deployment", () => {
       [501, "success"],
       [500, "inactive"],
     ]);
+  });
+
+  it("retires only its own PR's deployments in the shared environment", async () => {
+    const gh = fakeGitHub();
+    const other = event("synchronize", [], 8, "feat/y");
+    await new Feedback(other, deps(gh.fetchImpl).deps).run(false, async () => {});
+    await new Feedback(event(), deps(gh.fetchImpl).deps).run(false, async () => {});
+    await new Feedback(event(), deps(gh.fetchImpl).deps).run(false, async () => {});
+    expect(gh.deployments.map((d) => [d.id, d.environment, d.states[0]])).toEqual([
+      [502, "Preview", "success"],
+      [501, "Preview", "inactive"],
+      [500, "Preview", "success"],
+    ]);
+    await new Feedback(event("closed"), deps(gh.fetchImpl).deps).close(async () => {});
+    expect(gh.deployments.map((d) => d.states[0])).toEqual(["inactive", "inactive", "success"]);
+  });
+
+  it("ignores deployments without its payload, and reads a payload GitHub returns as a string", async () => {
+    const gh = fakeGitHub();
+    await new Feedback(event(), deps(gh.fetchImpl).deps).run(false, async () => {});
+    gh.deployments.push(
+      { id: 1, environment: "Preview", payload: {}, states: ["success"] },
+      { id: 2, environment: "Preview", payload: '{"swpPullRequest":7}', states: ["success"] },
+    );
+    await new Feedback(event("closed"), deps(gh.fetchImpl).deps).close(async () => {});
+    expect(gh.deployments.map((d) => [d.id, d.states[0]])).toEqual([
+      [500, "inactive"],
+      [1, "success"],
+      [2, "inactive"],
+    ]);
+  });
+
+  it("can keep one environment per branch", async () => {
+    const gh = fakeGitHub();
+    const perBranch = { ...config, deploymentEnvironment: "Preview: {branch}" };
+    await new Feedback(event(), deps(gh.fetchImpl, { config: perBranch }).deps).run(false, async () => {});
+    expect(gh.deployments[0]!.environment).toBe("Preview: feat/x");
   });
 
   it("does not re-mark a deployment that is already inactive", async () => {

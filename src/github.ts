@@ -1,6 +1,6 @@
 export type DeploymentState = "in_progress" | "success" | "failure" | "error" | "inactive";
 type Comment = { id: number; body?: string };
-type Deployment = { id: number };
+export type Deployment = { id: number; payload?: unknown };
 
 export class GitHubApi {
   constructor(
@@ -50,10 +50,16 @@ export class GitHubApi {
   }
 
   /** Skips the default merge and commit status checks, which would refuse a deployment while CI runs. */
-  async createDeployment(args: { sha: string; environment: string; description: string }): Promise<number> {
+  async createDeployment(args: {
+    sha: string;
+    environment: string;
+    description: string;
+    payload: Record<string, unknown>;
+  }): Promise<number> {
     const deployment = await this.call<Deployment>("POST", "/deployments", {
       ref: args.sha,
       environment: args.environment,
+      payload: args.payload,
       description: args.description,
       auto_merge: false,
       required_contexts: [],
@@ -80,8 +86,7 @@ export class GitHubApi {
     return statuses.some((s) => s.state === "inactive");
   }
 
-  async listDeployments(environment: string): Promise<number[]> {
-    const list = await this.all<Deployment>(`/deployments?environment=${encodeURIComponent(environment)}`);
-    return list.map((d) => d.id);
+  listDeployments(environment: string): Promise<Deployment[]> {
+    return this.all<Deployment>(`/deployments?environment=${encodeURIComponent(environment)}`);
   }
 }

@@ -101,7 +101,7 @@ Every command takes `--dry-run`, and `--env-file <path>` (default `.env.swp` whe
 
 ## Pull request feedback
 
-`swp pr` keeps one comment on the PR (Preview URL, which database it serves, pass or fail with the reason, the commit) and records a GitHub deployment, which gives the PR a "View deployment" button. On close, the comment says what was removed and the deployments are marked inactive. GitHub API errors (a fork's read-only token, missing permissions, rate limits) become `::warning::` lines; only the database check fails the job. Turn either off with `"prComment": false` or `"githubDeployments": false` in `swp.config.json`, or `--no-comment` / `--no-deployments`. The workflow needs:
+`swp pr` keeps one comment on the PR (Preview URL, which database it serves, pass or fail with the reason, the commit) and records a GitHub deployment, which gives the PR a "View deployment" button. On close, the comment says what was removed and the deployments are marked inactive. GitHub API errors (a fork's read-only token, missing permissions, rate limits) become `::warning::` lines; only the database check fails the job. Turn either off with `"prComment": false` or `"githubDeployments": false` in `swp.config.json`, or `--no-comment` / `--no-deployments`. Deployments share one transient environment, `Preview` (set `"deploymentEnvironment"`; `"Preview: {branch}"` gives one per branch), and each PR only ever retires its own. The workflow needs:
 
 ```yaml
 permissions:

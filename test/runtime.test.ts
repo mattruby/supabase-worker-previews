@@ -82,9 +82,9 @@ describe("withSupabasePreviews", () => {
   it("serves the overridden database to the browser and the identity route", async () => {
     const worker = withSupabasePreviews(htmlHandler);
     const env = { ...baseEnv, SUPABASE_OVERRIDE: JSON.stringify(override) };
-    const page = await worker.fetch!(new Request("https://x/"), env, {});
+    const page = await worker.fetch(new Request("https://x/"), env, {});
     expect(await page.text()).toContain(override.SUPABASE_URL);
-    const identity = await worker.fetch!(new Request("https://x/.well-known/supabase-preview"), env, {});
+    const identity = await worker.fetch(new Request("https://x/.well-known/supabase-preview"), env, {});
     expect(await identity.json()).toEqual({
       projectRef: override.SUPABASE_PROJECT_REF,
       supabaseUrl: override.SUPABASE_URL,
@@ -108,7 +108,7 @@ describe("withSupabasePreviews", () => {
 
   it("can turn off injection and the identity route", async () => {
     const worker = withSupabasePreviews(htmlHandler, { inject: false, identity: false });
-    const page = await worker.fetch!(new Request("https://x/.well-known/supabase-preview"), baseEnv, {});
+    const page = await worker.fetch(new Request("https://x/.well-known/supabase-preview"), baseEnv, {});
     expect(await page.text()).not.toContain("supabase.co");
   });
 });

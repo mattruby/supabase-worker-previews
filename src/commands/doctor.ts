@@ -73,7 +73,7 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
         if (!(key in wrangler.json) || key in previews) continue;
         warn(`"${key}" is bound at the top level but not in "previews"; Previews do not inherit bindings`);
       }
-      const topVars = Object.keys((wrangler.json.vars ?? {}) as object).filter((k) => !(k in vars));
+      const topVars = Object.keys(wrangler.json.vars ?? {}).filter((k) => !(k in vars));
       if (topVars.length) warn(`vars missing from previews.vars: ${topVars.join(", ")}`);
     }
   }

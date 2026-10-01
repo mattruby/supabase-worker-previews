@@ -113,6 +113,6 @@ export class CloudflareApi {
   }
 
   deletePreview(preview: string): void {
-    this.wrangler(["preview", "delete", "--name", preview], { captureStderr: true });
+    this.wrangler(["preview", "delete", "--name", preview, "--skip-confirmation"], { captureStderr: true });
   }
 }

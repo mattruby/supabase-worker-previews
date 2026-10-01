@@ -6,6 +6,7 @@ import { loadConfig, migrationFiles, type Config } from "./config.js";
 import { check, down, shared, up, type Deps } from "./commands/branches.js";
 import { checkLocal, checkRemote, type Finding } from "./commands/doctor.js";
 import { init } from "./commands/init.js";
+import { prune } from "./commands/prune.js";
 import { annotation, pr, readEvent, skipReason } from "./commands/pr.js";
 import { makeRunner, parseArgs, sleep } from "./run.js";
 import { SupabaseApi } from "./supabase.js";
@@ -19,9 +20,10 @@ const USAGE = `swp: branch previews for Cloudflare Workers on Supabase branching
   swp check [--branch <b>] [--pr <n>] [--isolated]    fail unless the Preview serves the right database
   swp down  [--branch <b>] [--pr <n>]                 delete the Preview and its own database
   swp pr                                              all of the above for a pull_request workflow
+  swp prune [--repo <owner/name>] [--yes]             list (or delete) branches and Previews with no open PR
 
 Flags: --dry-run, --env-file <path>, --worker <name>, --project-ref <ref>, --trunk <branch>
-Env:   SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (and GITHUB_TOKEN for pr)`;
+Env:   SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (and GITHUB_TOKEN for pr and prune)`;
 
 function currentBranch(flag: string | true | undefined): string {
   if (typeof flag === "string") return flag;
@@ -121,6 +123,12 @@ async function main(argv: string[]): Promise<number> {
     case "pr":
       await pr(event!, { ...deps, githubToken: env("GITHUB_TOKEN") });
       return 0;
+    case "prune": {
+      const repo = str(flags.repo) ?? process.env.GITHUB_REPOSITORY;
+      if (!repo) throw new Error("Pass --repo <owner/name> or set GITHUB_REPOSITORY");
+      await prune({ ...deps, githubToken: env("GITHUB_TOKEN"), repo, yes: flags.yes === true });
+      return 0;
+    }
     default:
       console.error(`Unknown command "${command}"\n\n${USAGE}`);
       return 2;

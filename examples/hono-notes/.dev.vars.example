@@ -1,0 +1,5 @@
+# Copy to .dev.vars for `npm run dev`; it overrides the production vars in wrangler.jsonc.
+# These are the local stack's values from `npx supabase start` (or `npx supabase status`).
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_PUBLISHABLE_KEY=<anon or publishable key from supabase status>
+SUPABASE_PROJECT_REF=local

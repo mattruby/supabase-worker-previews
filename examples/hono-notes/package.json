@@ -1,0 +1,20 @@
+{
+  "name": "hono-notes",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "doctor": "swp doctor"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "hono": "^4.13.12",
+    "supabase-worker-previews": "file:../.."
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261001.1",
+    "typescript": "^5.9.0",
+    "wrangler": "^4.145.0"
+  }
+}

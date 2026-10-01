@@ -30,13 +30,17 @@ Expected output, in a repo that already has migrations:
   It is dated before your existing migrations. Production has not run it: apply it with
   `supabase db push --include-all`, or run the SQL once and `supabase migration repair --status applied 20260913235959`.
 + .github/workflows/supabase-previews.yml
+  It runs the installed swp (npx swp pr); `swp init --action` writes one that uses the published action.
 
-Then, by hand:
-  1. Supabase dashboard, project settings, Integrations, GitHub: connect the repo,
+Next, by hand (the full guide: https://github.com/mattruby/supabase-worker-previews/blob/main/docs/quickstart.md):
+  1. Supabase dashboard, Project Settings, Integrations, GitHub: connect the repo, with
+     automatic branching on and "Deploy to production" off.
   ...
 ```
 
-`init` never overwrites. A file that already exists prints `- <file> exists, left alone`.
+The numbered steps it prints are the rest of this guide. Without `--project-ref` (and without a `supabase link`), step 1 is `Set "supabaseProjectRef" in swp.config.json`.
+
+`init` never overwrites, so it is safe to run again. A file that already exists prints `- <file> exists, left alone`. `--dry-run` prints what it would write and writes nothing. `--action` writes a workflow that uses the published GitHub Action instead of `npx swp pr` (see [step 8](#8-add-the-github-actions-secrets)).
 
 **Apply the grants migration to production** as the message says. It is dated one second before your first migration so that branch databases run it before any table exists ([why](../skills/supabase-worker-previews/references/gotchas.md#supabase-branches)). Production already has its tables, so you either push it with `--include-all` or run the SQL once and mark it applied. If your first migration already grants default privileges to `anon`/`authenticated`, `init` says so and writes nothing.
 
@@ -107,7 +111,7 @@ CLOUDFLARE_ACCOUNT_ID=...
 [Tokens](tokens.md) lists the least-privilege scopes. Then:
 
 ```bash
-npx swp shared --dry-run   # prints the plan
+npx swp shared --dry-run   # "Dry run: reads only, changes nothing." then the plan
 npx swp shared
 ```
 
@@ -161,14 +165,19 @@ npx swp doctor
 Expected output when everything is in place:
 
 ```text
-✓ wrangler 4.145.0
-✓ previews.vars uses <preview ref>
-✓ 20260913235959_api_default_privileges.sql grants the API roles default privileges
-✓ Supabase builds "preview" from GitHub <owner>/<repo>, so branches run the repo's migrations
-✓ "preview" (<preview ref>) tracks main
+Local files
+  ✓ wrangler 4.145.0
+  ✓ previews.vars uses <preview ref>
+  ✓ 20260913235959_api_default_privileges.sql grants the API roles default privileges
+
+Supabase (online, project <prod ref>)
+  ✓ Supabase builds "preview" from GitHub <owner>/<repo>, so branches run the repo's migrations
+  ✓ "preview" (<preview ref>) tracks main
+
+All checks passed.
 ```
 
-`✗` lines fail the command; `!` lines are warnings. The GitHub line comes from the branch's Supabase action runs; if none of them came from GitHub yet, doctor warns `cannot confirm the Supabase GitHub integration` (see [troubleshooting](troubleshooting.md#signed-in-reads-fail-with-403-or-permission-denied)). If your assets directory holds HTML and `assets.run_worker_first` is unset, doctor warns that those pages would get no Supabase config. Without `SUPABASE_ACCESS_TOKEN` it prints `! SUPABASE_ACCESS_TOKEN not set; skipped the online checks` and checks only the local files.
+`✗` lines fail the command (exit 1); `!` lines are warnings. Every `✗` and `!` has a line starting with `→` under it that says how to fix it, and the last line counts them, for example `1 error, 2 warnings. Fix the errors and run swp doctor again.` The GitHub line comes from the branch's Supabase action runs; if none of them came from GitHub yet, doctor warns `cannot confirm the Supabase GitHub integration` (see [troubleshooting](troubleshooting.md#signed-in-reads-fail-with-403-or-permission-denied)). If your assets directory holds HTML and `assets.run_worker_first` is unset, doctor warns that those pages would get no Supabase config. Without `SUPABASE_ACCESS_TOKEN` it checks only the local files and prints `- skipped: SUPABASE_ACCESS_TOKEN is not set. ...` under the Supabase heading.
 
 ## 7. Turn on Preview builds
 
@@ -195,7 +204,7 @@ permissions:
 
 If a secret is missing, `swp pr` fails with an `::error::` naming the empty secrets (a bot's PR, such as Dependabot's, only gets a `::warning::`).
 
-To run the published GitHub Action instead of the installed CLI, replace the setup-node, `npm ci` and `npx swp pr` steps with:
+To run the published GitHub Action instead of the installed CLI, run `npx swp init --action` before the workflow exists, or replace the setup-node, `npm ci` and `npx swp pr` steps with:
 
 ```yaml
 - uses: mattruby/supabase-worker-previews@v0

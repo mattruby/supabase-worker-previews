@@ -14,6 +14,8 @@ Find your symptom below, then follow its cause and fix. Each heading is phrased 
 - [The PR check is green but nothing happened](#the-pr-check-is-green-but-nothing-happened)
 - [No PR comment or View deployment button](#no-pr-comment-or-view-deployment-button)
 - [The access token cannot reveal secret API keys](#the-access-token-cannot-reveal-secret-api-keys)
+- [`node: .env.swp: not found` or exit code 9](#node-envswp-not-found-or-exit-code-9)
+- [A token is invalid or expired](#a-token-is-invalid-or-expired)
 
 ## Start here
 
@@ -41,7 +43,7 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
 
 1. `npx swp doctor`. If it reports `the first migration (...) does not grant default privileges; branch databases will 403`, run `npx swp init`, which writes the grants migration dated before your first one, and apply it to production as `init` instructs.
 2. Make sure the Supabase GitHub integration is connected (Project Settings, Integrations, GitHub) before any branch is created. With `SUPABASE_ACCESS_TOKEN` set, `doctor` checks this:
-   - `branching is not enabled on <ref> (connect the Supabase GitHub integration)` when the project has no default branch.
+   - `branching is not enabled on <ref>` when the project has no default branch.
    - `✓ Supabase builds "<branch>" from GitHub <owner>/<repo>, so branches run the repo's migrations` when it finds proof of the connection.
    - `! cannot confirm the Supabase GitHub integration: ...` when it finds none.
 
@@ -200,9 +202,23 @@ The comment and deployment never fail the job. Look for `::warning::PR comment s
 
 `Project <ref>: the access token cannot reveal secret API keys; use a token with the project's secrets permission`: the API returned the secret key masked with `·`, so the token lacks the permission to reveal it. Give it **API Key Secrets: Read** ([tokens](tokens.md#supabase-access-token)).
 
+## `node: .env.swp: not found` or exit code 9
+
+**Symptom.** `swp ... --env-file <file>` prints `node: <file>: not found` and exits 9 before `swp` prints anything. When the file exists, `swp` instead stops with `Unknown flag --env-file. Did you mean --dotenv?`
+
+**Cause.** Node 24 reads `--env-file` anywhere on the command line as its own flag, so a missing file stops Node before `swp` runs. `swp` uses `--dotenv` for this reason.
+
+**Fix.** Use `--dotenv <file>`, or name the file `.env.swp`, which `swp` loads by default.
+
+## A token is invalid or expired
+
+**Symptom.** A command fails with one line such as `Supabase API GET /projects/<ref>/branches: 401 JWT could not be decoded. SUPABASE_ACCESS_TOKEN is invalid or expired; see ...`. GitHub calls read `GitHub API GET <path>: 401 ...`.
+
+**Fix.** Create a new token with the scopes in [tokens](tokens.md) and update `.env.swp` or the Actions secret it names. If a variable is missing rather than wrong, `swp` lists each missing one with where to get it.
+
 ## Still stuck
 
-Open an [issue](https://github.com/mattruby/supabase-worker-previews/issues/new/choose) with the output of `npx swp doctor` and the failing log. If you found a platform behaviour that disagrees with [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md), say what you ran and what you saw.
+Run the failing command again with `SWP_DEBUG=1` to print the stack trace, then open an [issue](https://github.com/mattruby/supabase-worker-previews/issues/new/choose) with it, the output of `npx swp doctor` and the failing log. If you found a platform behaviour that disagrees with [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md), say what you ran and what you saw.
 
 ---
 

@@ -193,7 +193,7 @@ These are enforced in code, not by convention:
 - `prune` deletes nothing without `--yes`.
 - `check` throws `Preview <slug> serves the production database <ref>; refusing to pass` the first time it sees production, with no retry.
 - `doctor` fails if `previews.vars` points at the production ref or contains `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_OVERRIDE`.
-- Every command takes `--dry-run`, which prints the wrangler commands and API writes instead of running them. `shared`, `up`, `check`, `down`, `pr` and `prune` still require `SUPABASE_ACCESS_TOKEN` in dry-run (and `GITHUB_TOKEN` for `pr` and `prune`), and the reads still happen (`shared` lists branches; `down` lists branches and Previews; `pr` lists the PR's files and, on the shared path, Previews and branches; `prune` reads everything it plans from).
+- Every command that changes something (all but `doctor`) takes `--dry-run`, which prints the wrangler commands and API writes instead of running them. `shared`, `up`, `check`, `down`, `pr` and `prune` still require `SUPABASE_ACCESS_TOKEN` in dry-run (and `GITHUB_TOKEN` for `pr` and `prune`), and the reads still happen (`shared` lists branches; `down` lists branches and Previews; `pr` lists the PR's files and, on the shared path, Previews and branches; `prune` reads everything it plans from).
 
 [Security](security.md) covers what each token can reach.
 

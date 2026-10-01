@@ -26,7 +26,7 @@ Enforced in code:
 - **Production fails the check at once.** If a Preview serves the production ref, `check` throws without retrying.
 - **Secrets stay out of committed config.** `doctor` fails if `previews.vars` contains `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_OVERRIDE`, or points at the production ref.
 - **A broken override fails loudly.** A `SUPABASE_OVERRIDE` missing any of its four values throws instead of falling back to another database.
-- **Dry runs.** Every command takes `--dry-run` and prints the wrangler commands and writes it would make. `swp pr` writes no comment or deployment in a dry run.
+- **Dry runs.** Every command that changes something (all but `doctor`) takes `--dry-run` and prints the wrangler commands and writes it would make. `swp pr` writes no comment or deployment in a dry run.
 
 These guards protect against `swp` mistakes. They do not limit what the tokens themselves can do.
 

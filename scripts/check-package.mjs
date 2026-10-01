@@ -77,7 +77,7 @@ try {
 
   const swp = join(consumer, "node_modules", ".bin", process.platform === "win32" ? "swp.cmd" : "swp");
   const help = run(swp, ["--help"], consumer);
-  check(help.stdout.includes("swp init"), "swp --help prints the usage");
+  check(help.status === 0 && help.stdout.includes("swp init"), "swp --help prints the usage and exits 0");
   const helpCommand = run(swp, ["help"], consumer);
   check(helpCommand.status === 0 && helpCommand.stdout.includes("swp init"), "swp help exits 0");
 

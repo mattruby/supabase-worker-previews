@@ -4,35 +4,52 @@ Reference for every command, flag, environment variable and config field, the wr
 
 ## Commands
 
-| Command                                             | Does                                                                                                                      |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `swp init [--project-ref <ref>] [--trunk <branch>]` | Scaffold config, grants migration and workflow (never overwrites)                                                         |
-| `swp doctor`                                        | Check wrangler, the `previews` block, bindings, static HTML, grants migration, auth redirects; with a token, Supabase too |
-| `swp shared`                                        | Create or repair the shared Preview database                                                                              |
-| `swp up [--branch <b>] [--pr <n>]`                  | Give a branch's Preview its own database                                                                                  |
-| `swp check [--branch <b>] [--pr <n>] [--isolated]`  | Fail unless the Preview serves the right database; fail at once on production                                             |
-| `swp down [--branch <b>] [--pr <n>]`                | Delete the Preview and its own database                                                                                   |
-| `swp pr`                                            | Inside a `pull_request` workflow: `down` on close, else `up` or `release`, then `check`, and report on the PR             |
-| `swp prune [--repo <owner/name>] [--yes]`           | List leftovers of deleted branches and closed PRs; delete them with `--yes`                                               |
+`swp --help` lists them in three groups; `swp <command> --help` (or `swp help <command>`) shows one command's flags and examples, and `swp --version` (or `-v`) prints the version.
 
-`swp help` (or `--help`) prints the same summary.
+**Set up**
+
+| Command                                                                    | Does                                                                                                                      |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `swp init [--project-ref <ref>] [--trunk <branch>] [--action] [--dry-run]` | Scaffold `swp.config.json`, the grants migration and the PR workflow (never overwrites)                                   |
+| `swp doctor`                                                               | Check wrangler, the `previews` block, bindings, static HTML, grants migration, auth redirects; with a token, Supabase too |
+| `swp shared`                                                               | Create or repair the shared Preview database; prints its `previews.vars`                                                  |
+
+**Per branch**
+
+| Command                                            | Does                                                                          |
+| -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `swp up [--branch <b>] [--pr <n>]`                 | Give a branch's Preview its own database                                      |
+| `swp check [--branch <b>] [--pr <n>] [--isolated]` | Fail unless the Preview serves the right database; fail at once on production |
+| `swp down [--branch <b>] [--pr <n>]`               | Delete the Preview and its own database                                       |
+
+**In CI**
+
+| Command                                    | Does                                                                                                          |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `swp pr [--no-comment] [--no-deployments]` | Inside a `pull_request` workflow: `down` on close, else `up` or `release`, then `check`, and report on the PR |
+| `swp prune [--repo <owner/name>] [--yes]`  | List leftovers of deleted branches and closed PRs; delete them with `--yes`                                   |
 
 - `--branch` defaults to `WORKERS_CI_BRANCH`, then `GITHUB_HEAD_REF`, then the current git branch.
 - `--pr <n>` names the PR whose `pr-<n>` Preview to use when `previewName` is `"pr"`.
 - `--isolated` makes `check` expect the branch's own database instead of the shared Preview database.
-- `--repo` defaults to `GITHUB_REPOSITORY`.
+- `--repo` defaults to `GITHUB_REPOSITORY`, then the repo of the `origin` remote.
+- `init --action` writes a workflow that uses the published [GitHub Action](#github-action) instead of `npx swp pr`.
 
-### Flags for every command
+A mistyped command, flag or `swp.config.json` key gets a suggestion (`Unknown command "sharde". Did you mean "swp shared"?`). Unknown flags and stray arguments exit 2.
 
-| Flag                  | Effect                                                                                                                            |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `--dry-run`           | Print the wrangler commands and API writes instead of making them                                                                 |
-| `--dotenv <path>`     | Load environment variables from this file (default `.env.swp` when it exists). Not `--env-file`: Node claims that flag for itself |
-| `--worker <name>`     | Overrides `worker` in `swp.config.json`                                                                                           |
-| `--project-ref <ref>` | Overrides `supabaseProjectRef`                                                                                                    |
-| `--trunk <branch>`    | Overrides `trunk`                                                                                                                 |
+### Common flags
 
-`swp pr` also takes `--no-comment` and `--no-deployments`.
+| Flag                  | Effect                                                                                                                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--dry-run`           | Print the plan instead of changing anything; the output opens with `Dry run: reads only, changes nothing.` Not on `doctor`, which only reads |
+| `--dotenv <path>`     | Load tokens from this file (default `.env.swp` when it exists). Not `--env-file`: Node claims that flag for itself                           |
+| `--worker <name>`     | Overrides `worker` in `swp.config.json`                                                                                                      |
+| `--project-ref <ref>` | Overrides `supabaseProjectRef`                                                                                                               |
+| `--trunk <branch>`    | Overrides `trunk`                                                                                                                            |
+| `-h`, `--help`        | Show help                                                                                                                                    |
+| `-v`, `--version`     | Print the version                                                                                                                            |
+
+`init` takes only `--project-ref`, `--trunk`, `--action` and `--dry-run`. `swp <command> --help` lists exactly what each command accepts.
 
 In `--dry-run`, `shared`, `up`, `check`, `down`, `pr` and `prune` still need `SUPABASE_ACCESS_TOKEN` (and `GITHUB_TOKEN` for `pr` and `prune`), because the reads still happen.
 
@@ -44,6 +61,9 @@ In `--dry-run`, `shared`, `up`, `check`, `down`, `pr` and `prune` still need `SU
 | `CLOUDFLARE_API_TOKEN`  | `shared`, `up`, `check`, `down`, `pr`, `prune`                                 |
 | `CLOUDFLARE_ACCOUNT_ID` | the same                                                                       |
 | `GITHUB_TOKEN`          | `pr`, `prune`                                                                  |
+| `SWP_DEBUG`             | optional: set to `1` to print the stack trace of an error                      |
+
+A command missing a token names each one and where to get it. A rejected token fails with one line ending `<TOKEN> is invalid or expired; see <tokens guide>`.
 
 [Tokens](tokens.md) lists the least-privilege scopes for each.
 

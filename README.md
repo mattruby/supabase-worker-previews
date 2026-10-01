@@ -83,25 +83,25 @@ The **[full quickstart](docs/quickstart.md)** walks through every step with the 
 
 ## Commands
 
-| Command      | Does                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------ |
-| `swp init`   | Scaffold `swp.config.json`, the grants migration and the workflow (never overwrites) |
-| `swp doctor` | Check the whole setup, offline and (with a token) against Supabase                   |
-| `swp shared` | Create or repair the shared Preview database                                         |
-| `swp up`     | Give a branch's Preview its own database                                             |
-| `swp check`  | Fail unless the Preview serves the right database                                    |
-| `swp down`   | Delete a branch's Preview and its own database                                       |
-| `swp pr`     | All of the above for a `pull_request` workflow, plus the PR comment and deployment   |
-| `swp prune`  | List leftovers of deleted branches and closed PRs; delete them with `--yes`          |
+| Group          | Command      | Does                                                                                 |
+| -------------- | ------------ | ------------------------------------------------------------------------------------ |
+| **Set up**     | `swp init`   | Scaffold `swp.config.json`, the grants migration and the workflow (never overwrites) |
+|                | `swp doctor` | Check the whole setup, offline and (with a token) against Supabase                   |
+|                | `swp shared` | Create or repair the shared Preview database; prints its `previews.vars`             |
+| **Per branch** | `swp up`     | Give a branch's Preview its own database                                             |
+|                | `swp check`  | Fail unless the Preview serves the right database                                    |
+|                | `swp down`   | Delete a branch's Preview and its own database                                       |
+| **In CI**      | `swp pr`     | All of the above for a `pull_request` workflow, plus the PR comment and deployment   |
+|                | `swp prune`  | List leftovers of deleted branches and closed PRs; delete them with `--yes`          |
 
-Flags, environment variables, every `swp.config.json` field and the GitHub Action inputs are in the [configuration reference](docs/configuration.md).
+`swp <command> --help` shows one command's flags and examples, and `swp --version` prints the version. Flags, environment variables, every `swp.config.json` field and the GitHub Action inputs are in the [configuration reference](docs/configuration.md).
 
 ## Safety
 
 - `swp` never writes to, repoints or deletes the production project, and never deletes a persistent branch.
 - `swp check` fails the first time a Preview serves production, with no retry.
 - `swp doctor` fails if `previews.vars` names production or holds a secret.
-- `swp prune` only lists until you pass `--yes`, and every command takes `--dry-run`.
+- `swp prune` only lists until you pass `--yes`, and every command that changes something takes `--dry-run`.
 
 [Security](docs/security.md) covers what `swp` can touch and what each token can reach.
 

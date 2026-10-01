@@ -1,14 +1,27 @@
 # supabase-worker-previews
 
-Vercel-style branch previews for a **Cloudflare Worker** on **Supabase**.
+Vercel-style branch previews for a **Cloudflare Worker** on **Supabase**. Every git branch gets a [Worker Preview](https://developers.cloudflare.com/workers/previews/) on a shared Preview database, every PR that changes `supabase/` gets its own Supabase branch database, and a CI check proves which database each Preview actually serves.
 
-- Every git branch gets a [Worker Preview](https://developers.cloudflare.com/workers/) on a shared Preview database, never production.
-- Every PR that changes `supabase/` gets its own Supabase branch database, migrated and seeded from the PR, and deleted when the PR closes.
-- A CI check proves which database each Preview actually serves, and fails if it is production.
+> **Status: beta.** Cloudflare [launched Worker Previews on 2026-09-22](https://developers.cloudflare.com/changelog/post/2026-09-22-worker-previews/), and this package is 0.x. Expect the platform and the CLI to change.
+>
+> Not affiliated with Supabase or Cloudflare.
 
-Cloudflare and Supabase each do most of this natively, but nothing connects them the way Vercel's Supabase integration does. This package is that connection: a CLI (`swp`), a small Worker wrapper, a one-step GitHub workflow, and a Claude Code skill documenting the platform behaviour it works around.
+## How it works
 
-## How it fits together
+```mermaid
+flowchart LR
+  push["git push"] --> builds["Workers Builds"]
+  builds -- trunk --> prod["Production Worker"]
+  builds -- any other branch --> preview["Worker Preview<br/>npx wrangler preview"]
+  prod --> proddb[("Supabase project<br/>(production)")]
+  preview -- "previews.vars" --> shareddb[("Shared Preview database<br/>persistent branch 'preview'")]
+  pr["PR changes supabase/<br/>or has label isolated-db"] --> integ["Supabase GitHub integration"]
+  integ --> prdb[("Per-PR branch database")]
+  pr --> action["GitHub Actions: swp pr"]
+  action -- "SUPABASE_OVERRIDE secret" --> preview
+  preview -. "isolated PRs" .-> prdb
+  action -- "swp check reads<br/>/.well-known/supabase-preview" --> preview
+```
 
 | Piece                    | Owner                       | Role                                                                                      |
 | ------------------------ | --------------------------- | ----------------------------------------------------------------------------------------- |
@@ -20,22 +33,24 @@ Cloudflare and Supabase each do most of this natively, but nothing connects them
 | `SUPABASE_OVERRIDE`      | `swp pr`                    | One Preview secret pointing an isolated PR at its own database                            |
 | `withSupabasePreviews()` | your Worker                 | Applies the override, hands the browser its Supabase config, answers `swp check`          |
 
-One build serves any database: the Worker reads Supabase settings at request time and injects the public ones into each HTML page, so no `VITE_SUPABASE_URL`-style build-time values differ between environments.
+One build serves any database. The Worker reads its Supabase settings at request time and injects the public ones into each HTML page, so no `VITE_SUPABASE_URL`-style build-time values differ between environments. [How it works](docs/how-it-works.md) explains each choice.
 
-## Setup
+## Quickstart
+
+Needs a Worker deployed by [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/), wrangler 4.135.0 or later, a Supabase project on a plan with branching, and the repo on GitHub. The [full quickstart](docs/quickstart.md) has every dashboard setting and the expected output.
 
 ```bash
 npm install --save-dev supabase-worker-previews
 npx swp init --project-ref <production project ref>
 ```
 
-`init` writes `swp.config.json`, a first migration that grants the API roles default privileges (see [why](skills/supabase-worker-previews/references/gotchas.md#supabase-branches)), and `.github/workflows/supabase-previews.yml`. Then:
+`init` writes `swp.config.json`, a first migration that grants the API roles default privileges ([why](skills/supabase-worker-previews/references/gotchas.md#supabase-branches)), and `.github/workflows/supabase-previews.yml`. It never overwrites a file. Then:
 
 1. **Supabase**: project settings, Integrations, GitHub. Connect the repo, turn on automatic branching, turn **off** "deploy to production" (your trunk deploy owns production migrations).
 2. **Wrangler config**: add a `previews` block that redeclares every binding the Worker uses (Previews inherit none).
 3. `npx swp shared`: creates the shared Preview database, stores its secret key in the Preview base config, and prints the `previews.vars` to paste in.
 4. **Workers Builds**: enable non-production branch builds with the deploy command `npx wrangler preview`.
-5. **GitHub Actions secrets**: `SUPABASE_ACCESS_TOKEN` (organization-scoped), `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`.
+5. **GitHub Actions secrets**: `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. See [tokens](docs/tokens.md) for least-privilege scopes.
 6. Wrap the Worker and read the config in the browser:
 
 ```ts
@@ -52,7 +67,7 @@ const { supabaseUrl, supabaseKey } = readPublicConfig() ?? {
 };
 ```
 
-Handlers receive `env` with the override applied, and so does `process.env` under `nodejs_compat`. Code that imports `env` from `cloudflare:workers` sees the raw values, so read Supabase settings from the handler's `env` or `process.env`.
+Handlers receive `env` with the override applied, and so does `process.env` under `nodejs_compat`. Code that imports `env` from `cloudflare:workers` sees the raw values, so read Supabase settings from the handler's `env` or `process.env`. The [framework guides](#docs) show this for TanStack Start, Hono, React Router and Astro.
 
 7. `npx swp doctor` checks all of it.
 
@@ -74,6 +89,10 @@ Handlers receive `env` with the override applied, and so does `process.env` unde
 }
 ```
 
+<!-- TODO(wrangler-toml): document wrangler.toml support once merged. Today doctor reads only the `name` from wrangler.toml and warns that the previews block is not checked. -->
+
+<!-- TODO(action): once the composite action merges, show the `uses: mattruby/supabase-worker-previews@v0` workflow here as the alternative to the `npx swp pr` template. -->
+
 ## Commands
 
 | Command                               | Does                                                                                                                      |
@@ -86,7 +105,11 @@ Handlers receive `env` with the override applied, and so does `process.env` unde
 | `swp down --branch <b>`               | Delete the Preview and its own database                                                                                   |
 | `swp pr`                              | Inside a `pull_request` workflow: `down` on close, else `up` when needed, then `check`                                    |
 
-Every command takes `--dry-run`, and `--env-file <path>` (default `.env.swp` when present). `swp.config.json`:
+<!-- TODO(prune): add the `swp prune` row once merged. -->
+
+`--branch` defaults to `WORKERS_CI_BRANCH`, then `GITHUB_HEAD_REF`, then the current git branch. Every command takes `--dry-run` and `--env-file <path>` (default `.env.swp` when present); `--worker`, `--project-ref` and `--trunk` override the config file. Environment: `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `GITHUB_TOKEN` for `swp pr`.
+
+`swp.config.json`:
 
 | Field                | Default         |                                                      |
 | -------------------- | --------------- | ---------------------------------------------------- |
@@ -98,6 +121,8 @@ Every command takes `--dry-run`, and `--env-file <path>` (default `.env.swp` whe
 | `isolatedLabel`      | `isolated-db`   | PR label that asks for one anyway                    |
 | `checkPath`          | `/`             | Page `check` scans when the identity route is absent |
 | `workersSubdomain`   | looked up       | Your `*.workers.dev` subdomain                       |
+
+<!-- TODO(preview-name-pr): add the `previewName` field (`"pr"` naming) once merged. -->
 
 ## Pull request feedback
 
@@ -129,6 +154,19 @@ Instead of installing the package and calling `npx swp pr`, a workflow can use t
 - `swp` never writes to, repoints or deletes the production project through a branch record, and never deletes a persistent branch.
 - `check` fails the first time a Preview serves production.
 - `doctor` fails if `previews.vars` names production or holds a secret.
+
+[Security](docs/security.md) covers what `swp` can touch and the blast radius of each token.
+
+## Docs
+
+- [Quickstart](docs/quickstart.md): from an existing Worker and Supabase project to the first working PR Preview
+- [How it works](docs/how-it-works.md): environments, ownership, config injection, the override secret, the identity route
+- [Troubleshooting](docs/troubleshooting.md): symptom, cause, fix
+- [Tokens](docs/tokens.md): least-privilege Cloudflare, Supabase and GitHub credentials
+- [Security](docs/security.md): what `swp` can touch, what is public, what is secret
+- [Compared with Vercel](docs/vs-vercel.md): when to pick Vercel and its Supabase integration instead
+- Frameworks: [TanStack Start](docs/frameworks/tanstack-start.md), [Hono](docs/frameworks/hono.md), [React Router v7](docs/frameworks/react-router.md), [Astro](docs/frameworks/astro.md)
+- [Measured platform behaviour](skills/supabase-worker-previews/references/gotchas.md)
 
 ## Claude Code plugin
 

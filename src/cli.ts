@@ -9,6 +9,7 @@ import {
   LEGACY_CONFIG_FILE,
   LEGACY_DOTENV_FILE,
   loadConfig,
+  loadDotenv,
   migrationFiles,
   type Config,
 } from "./config.js";
@@ -86,7 +87,7 @@ async function main(argv: string[]): Promise<number> {
     console.error(errStyle.yellow(`Loading ${LEGACY_DOTENV_FILE}; rename it to ${DOTENV_FILE}.`));
   if (envFile) {
     if (!existsSync(envFile)) throw new Error(`--dotenv ${envFile}: no such file`);
-    process.loadEnvFile(envFile);
+    loadDotenv(envFile);
   }
 
   if (command === "init") {

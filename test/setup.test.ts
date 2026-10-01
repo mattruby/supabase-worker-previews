@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadConfig, type Config } from "../src/config.js";
+import { loadDotenv, loadConfig, type Config } from "../src/config.js";
 import {
   checkLocal,
   checkRemote,
@@ -58,6 +58,23 @@ describe("parseJsonc", () => {
       "list": [1, 2,],
     }`;
     expect(parseJsonc(text)).toEqual({ name: "app", url: "https://x.dev/a//b", odd: "a,}", list: [1, 2] });
+  });
+});
+
+describe("loadDotenv", () => {
+  it("sets only the token variables, never NODE_OPTIONS or PATH, and keeps values already set", () => {
+    const dir = project({
+      ".env.supabase-worker-previews":
+        "SUPABASE_ACCESS_TOKEN=from-file\nCLOUDFLARE_API_TOKEN=from-file\nNODE_OPTIONS=--require ./evil.cjs\nPATH=/evil\n",
+    });
+    const env: Record<string, string | undefined> = { CLOUDFLARE_API_TOKEN: "from-shell", PATH: "/usr/bin" };
+    const loaded = loadDotenv(join(dir, ".env.supabase-worker-previews"), env);
+    expect(loaded).toEqual(["SUPABASE_ACCESS_TOKEN"]);
+    expect(env).toEqual({
+      CLOUDFLARE_API_TOKEN: "from-shell",
+      PATH: "/usr/bin",
+      SUPABASE_ACCESS_TOKEN: "from-file",
+    });
   });
 });
 

@@ -4,7 +4,7 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/mattruby/supabase-worker-previews/ci.yml?branch=main&label=CI)](https://github.com/mattruby/supabase-worker-previews/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/mattruby/supabase-worker-previews)](LICENSE)
 
-**Vercel-style PR Previews for a Cloudflare Worker on Supabase, each on the right database, with a check that proves it.**
+**Vercel-style PR Previews for a Cloudflare Worker on Supabase, each on the right database, with a check that confirms it.**
 
 Every branch gets a [Worker Preview](https://developers.cloudflare.com/workers/previews/) on a shared Preview database. Every PR that changes `supabase/` gets its own database, migrated and seeded from the PR. One build serves all of them, and no Preview ever serves production.
 

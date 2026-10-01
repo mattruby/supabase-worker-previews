@@ -1,7 +1,7 @@
 name: Preview database
 
-# The same job as supabase-previews.yml, through the published action. It runs
-# the project's installed supabase-worker-previews when there is one, else downloads the package.
+# The same job as supabase-previews.yml, through the published action. After
+# npm ci it runs the project's own supabase-worker-previews and wrangler.
 
 on:
   pull_request:

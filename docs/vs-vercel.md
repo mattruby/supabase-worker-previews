@@ -24,7 +24,7 @@ Gaps, as documented:
 - **An explicit shared Preview database** for every branch without its own: a persistent Supabase branch that tracks the trunk. A Preview never falls back to production by default, and `doctor` fails if `previews.vars` names production.
 - **Its own database for each PR that changes `supabase/`**, or carries the `isolated-db` label, made by the same Supabase GitHub integration.
 - **No rebuilds to switch database.** The Worker reads its Supabase settings per request and injects the public ones into HTML, so pointing a Preview at a new database is one secret write, not a new build.
-- **A check that proves it.** `supabase-worker-previews check` reads which database each Preview serves and fails a PR the moment one serves production.
+- **A check that confirms it.** `supabase-worker-previews check` reads which database each Preview serves and fails a PR the moment one serves production.
 
 Costs: a GitHub workflow and three secrets in your repo, a `previews` block to keep in step with your bindings, a wrapper around the Worker, and the caveat that code reading `env` from `cloudflare:workers` does not see the override. Worker Previews [launched on 2026-09-22](https://developers.cloudflare.com/changelog/post/2026-09-22-worker-previews/) and `supabase-worker-previews` is 0.x.
 

@@ -83,7 +83,11 @@ export async function shared(deps: Deps): Promise<string> {
     );
     return `<${config.sharedBranch}>`;
   }
-  if (!branches.some((b) => b.is_default)) await enableBranching(deps);
+  if (!branches.some((b) => b.is_default))
+    throw new Error(
+      `Branching is not enabled on ${parent}. Connect the repo in the Supabase dashboard ` +
+        "(project settings, Integrations, GitHub, automatic branching on), then run swp shared again.",
+    );
   let branch = branches.find((b) => b.name === config.sharedBranch);
   if (!branch) {
     branch = await supabase.createBranch(parent, {
@@ -116,30 +120,6 @@ export async function shared(deps: Deps): Promise<string> {
     ),
   );
   return ref;
-}
-
-/**
- * The first branch made on a never-branched project either relabels the
- * project itself or creates a real database and names the project "main".
- * A throwaway first branch keeps a real one from being mistaken for production.
- */
-export async function enableBranching(deps: Deps): Promise<void> {
-  const parent = deps.config.supabaseProjectRef;
-  const first = await deps.supabase.createBranch(parent, { name: "production" });
-  if (first.project_ref === parent) {
-    deps.runner.log(`  branching enabled on ${parent}; its default branch is "production"`);
-    return;
-  }
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      await deps.supabase.deleteBranch(first.project_ref);
-      break;
-    } catch (err) {
-      if (attempt >= 12) throw err;
-      await deps.sleep(5_000);
-    }
-  }
-  deps.runner.log(`  branching enabled on ${parent}; removed the extra first branch ${first.project_ref}`);
 }
 
 /**

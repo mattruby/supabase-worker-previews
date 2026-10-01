@@ -5,7 +5,6 @@ import {
   assertIsolated,
   check,
   down,
-  enableBranching,
   isDisposable,
   previewKey,
   release,
@@ -202,22 +201,13 @@ describe("shared", () => {
     await shared(deps(s.supabase, fakeCloudflare().cloudflare));
     expect(s.log.created).toEqual([{ name: "preview", gitBranch: "main", persistent: true }]);
   });
-});
 
-describe("enableBranching", () => {
-  it("deletes the extra first branch when Supabase made a real database", async () => {
-    const s = fakeSupabase([], {
-      createBranch: async () => ({ id: "f", name: "production", project_ref: "firstref", status: "" }),
-    });
-    await enableBranching(deps(s.supabase, fakeCloudflare().cloudflare));
-    expect(s.log.deleted).toEqual(["firstref"]);
-  });
-
-  it("leaves it alone when the first branch is the project itself", async () => {
-    const s = fakeSupabase([], {
-      createBranch: async () => ({ id: "f", name: "production", project_ref: PARENT, status: "" }),
-    });
-    await enableBranching(deps(s.supabase, fakeCloudflare().cloudflare));
+  it("refuses a project without branching instead of creating its first branch", async () => {
+    const s = fakeSupabase([]);
+    await expect(shared(deps(s.supabase, fakeCloudflare().cloudflare))).rejects.toThrow(
+      /Branching is not enabled/,
+    );
+    expect(s.log.created).toEqual([]);
     expect(s.log.deleted).toEqual([]);
   });
 });

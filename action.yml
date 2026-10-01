@@ -1,0 +1,68 @@
+name: Supabase Worker Previews
+description: Point each PR's Cloudflare Worker Preview at the right Supabase branch database, prove it, and report on the PR.
+author: mattruby
+branding:
+  icon: database
+  color: green
+
+inputs:
+  command:
+    description: The swp command to run.
+    default: pr
+  args:
+    description: Extra arguments for swp, such as --dry-run.
+    default: ""
+  working-directory:
+    description: Directory holding swp.config.json and the wrangler config.
+    default: "."
+  version:
+    description: supabase-worker-previews version to run when the project does not install it.
+    default: "0"
+  github-token:
+    description: Token for the PR comment and the GitHub deployment.
+    default: ${{ github.token }}
+  supabase-access-token:
+    description: Organization-scoped Supabase access token.
+    required: true
+  cloudflare-api-token:
+    description: Cloudflare API token that can manage the Worker's Previews.
+    required: true
+  cloudflare-account-id:
+    description: Cloudflare account ID.
+    required: true
+  comment:
+    description: Keep a status comment on the PR.
+    default: "true"
+  deployments:
+    description: Record a GitHub deployment for the PR head.
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        SUPABASE_ACCESS_TOKEN: ${{ inputs.supabase-access-token }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        SWP_COMMAND: ${{ inputs.command }}
+        SWP_ARGS: ${{ inputs.args }}
+        SWP_VERSION: ${{ inputs.version }}
+        SWP_COMMENT: ${{ inputs.comment }}
+        SWP_DEPLOYMENTS: ${{ inputs.deployments }}
+        npm_config_yes: "true"
+      run: |
+        set -euo pipefail
+        flags=()
+        if [ "$SWP_COMMENT" = "false" ]; then flags+=(--no-comment); fi
+        if [ "$SWP_DEPLOYMENTS" = "false" ]; then flags+=(--no-deployments); fi
+        if npx --no-install swp help >/dev/null 2>&1; then
+          swp=(npx --no-install swp)
+        else
+          echo "swp is not installed in $PWD; running supabase-worker-previews@$SWP_VERSION"
+          swp=(npx --yes "supabase-worker-previews@$SWP_VERSION")
+        fi
+        # SWP_ARGS is split on spaces on purpose.
+        "${swp[@]}" "$SWP_COMMAND" $SWP_ARGS ${flags[@]+"${flags[@]}"}

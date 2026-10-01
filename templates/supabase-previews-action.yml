@@ -1,0 +1,29 @@
+name: Preview database
+
+# The same job as supabase-previews.yml, through the published action. It runs
+# the project's installed swp when there is one, else downloads the package.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, closed]
+
+concurrency:
+  group: supabase-previews-${{ github.head_ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  deployments: write
+
+jobs:
+  preview-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mattruby/supabase-worker-previews@v0
+        with:
+          supabase-access-token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -21,6 +21,7 @@ const USAGE = `swp: branch previews for Cloudflare Workers on Supabase branching
   swp pr                                              all of the above for a pull_request workflow
 
 Flags: --dry-run, --env-file <path>, --worker <name>, --project-ref <ref>, --trunk <branch>
+       --no-comment, --no-deployments   (pr: skip the PR comment or the GitHub deployment)
 Env:   SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (and GITHUB_TOKEN for pr)`;
 
 function currentBranch(flag: string | true | undefined): string {
@@ -65,6 +66,8 @@ async function main(argv: string[]): Promise<number> {
     worker: str(flags.worker),
     supabaseProjectRef: str(flags["project-ref"]),
     trunk: str(flags.trunk),
+    prComment: flags["no-comment"] ? false : undefined,
+    githubDeployments: flags["no-deployments"] ? false : undefined,
   });
 
   if (command === "doctor") {

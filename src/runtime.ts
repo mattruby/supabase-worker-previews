@@ -125,6 +125,15 @@ type Handler<E> = {
 };
 
 /**
+ * Frameworks that call the entry without `env` (TanStack Start on nitro calls
+ * `fetch(request)`) still expose vars and secrets on process.env under nodejs_compat.
+ */
+function envOrProcessEnv<E extends object>(env: E | undefined): E {
+  if (env && typeof env === "object") return env;
+  return ((globalThis as { process?: { env?: object } }).process?.env ?? {}) as E;
+}
+
+/**
  * Wraps a Worker's default export. Every handler sees the override applied;
  * `fetch` also injects the public config and answers the identity route that
  * `swp check` reads.
@@ -138,12 +147,12 @@ export function withSupabasePreviews<E extends object, H extends Handler<E>>(
   for (const [name, fn] of Object.entries(handler)) {
     if (typeof fn !== "function" || name === "fetch") continue;
     wrapped[name] = (event: unknown, env: E, ctx: unknown) =>
-      (fn as (...a: unknown[]) => unknown).call(handler, event, resolveEnv(env), ctx);
+      (fn as (...a: unknown[]) => unknown).call(handler, event, resolveEnv(envOrProcessEnv(env)), ctx);
   }
   if (handler.fetch) {
     const fetchFn = handler.fetch;
     wrapped.fetch = async (request: Request, rawEnv: E, ctx: unknown) => {
-      const env = resolveEnv(rawEnv);
+      const env = resolveEnv(envOrProcessEnv(rawEnv));
       if (identity && new URL(request.url).pathname === IDENTITY_PATH) return identityResponse(env);
       const response = await fetchFn.call(handler, request, env, ctx);
       const config = inject ? publicConfigFromEnv(env) : null;

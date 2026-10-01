@@ -52,7 +52,7 @@ const { supabaseUrl, supabaseKey } = readPublicConfig() ?? {
 };
 ```
 
-Handlers receive `env` with the override applied, and so does `process.env` under `nodejs_compat`. Code that imports `env` from `cloudflare:workers` sees the raw values, so read Supabase settings from the handler's `env` or `process.env`.
+Handlers receive `env` with the override applied, and so does `process.env` under `nodejs_compat`. A framework entry that is called without `env` (TanStack Start on nitro calls `fetch(request)`) is handed `process.env` instead. Code that imports `env` from `cloudflare:workers` sees the raw values, so read Supabase settings from the handler's `env` or `process.env`.
 
 7. `npx swp doctor` checks all of it.
 

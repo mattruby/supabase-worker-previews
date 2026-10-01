@@ -106,6 +106,25 @@ describe("withSupabasePreviews", () => {
     expect(seen).toBe(override.SUPABASE_URL);
   });
 
+  it("reads process.env when the framework calls fetch without env", async () => {
+    Object.assign(process.env, {
+      SUPABASE_URL: baseEnv.SUPABASE_URL,
+      SUPABASE_PUBLISHABLE_KEY: baseEnv.SUPABASE_PUBLISHABLE_KEY,
+      SUPABASE_OVERRIDE: JSON.stringify(override),
+    });
+    try {
+      const worker = withSupabasePreviews(htmlHandler) as {
+        fetch: (request: Request) => Promise<Response>;
+      };
+      const page = await worker.fetch(new Request("https://x/"));
+      expect(await page.text()).toContain(override.SUPABASE_URL);
+      const identity = await worker.fetch(new Request("https://x/.well-known/supabase-preview"));
+      expect(await identity.json()).toMatchObject({ projectRef: override.SUPABASE_PROJECT_REF });
+    } finally {
+      delete process.env.SUPABASE_OVERRIDE;
+    }
+  });
+
   it("can turn off injection and the identity route", async () => {
     const worker = withSupabasePreviews(htmlHandler, { inject: false, identity: false });
     const page = await worker.fetch!(new Request("https://x/.well-known/supabase-preview"), baseEnv, {});

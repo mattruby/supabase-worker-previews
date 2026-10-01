@@ -50,10 +50,10 @@ This folder is laid out as the root of a repo. To run it for real, copy it into 
 1. Replace `"file:../.."` in `package.json` with the published version (`"supabase-worker-previews": "^0.1.0"`) and run `npm install`.
 2. Put your production project ref in `swp.config.json`, and the production URL, publishable key and ref in the top-level `vars` of `wrangler.jsonc`.
 3. Connect the Supabase GitHub integration (automatic branching on, deploy to production off), and put your `workers.dev` subdomain in `supabase/config.toml`.
-4. Run `npx swp shared` and paste what it prints into `previews.vars`.
+4. Run `npx supabase-worker-previews shared` and paste what it prints into `previews.vars`.
 5. In Workers Builds, turn on non-production branch builds with the deploy command `npx wrangler preview`.
 6. Add the `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` Actions secrets ([tokens](../../docs/tokens.md)).
-7. `npx swp doctor`, then open a PR.
+7. `npx supabase-worker-previews doctor`, then open a PR.
 
 A PR that only changes `src/` gets a Preview on the shared Preview database. A PR that changes anything under `supabase/` (try adding a column to `notes`) gets its own database, migrated and seeded from the PR, and the comment on the PR says which one it is serving.
 

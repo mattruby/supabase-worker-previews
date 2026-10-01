@@ -22,7 +22,7 @@ Who does what:
 - **`swp pr`** (GitHub Actions) gives the Preview of a PR with its own database one `SUPABASE_OVERRIDE` secret, proves which database each Preview serves, and cleans up on close.
 - **`withSupabasePreviews()`** wraps the Worker: applies the override, injects the public config into HTML, and serves `/.well-known/supabase-preview` for `swp check`.
 
-Start every investigation with `npx swp doctor` (add tokens for the online checks). Never point a Preview, test or reset at the production project; `swp` refuses to touch the default branch and `check` fails any Preview that serves production.
+Start every investigation with `npx supabase-worker-previews doctor` (add tokens for the online checks). Never point a Preview, test or reset at the production project; `swp` refuses to touch the default branch and `check` fails any Preview that serves production.
 
 ## Facts that cost real debugging time
 

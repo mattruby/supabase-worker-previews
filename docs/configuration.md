@@ -33,7 +33,7 @@ Reference for every command, flag, environment variable and config field, the wr
 - `--pr <n>` names the PR whose `pr-<n>` Preview to use when `previewName` is `"pr"`.
 - `--isolated` makes `check` expect the branch's own database instead of the shared Preview database.
 - `--repo` defaults to `GITHUB_REPOSITORY`, then the repo of the `origin` remote.
-- `init --action` writes a workflow that uses the published [GitHub Action](#github-action) instead of `npx swp pr`.
+- `init --action` writes a workflow that uses the published [GitHub Action](#github-action) instead of `npx supabase-worker-previews pr`.
 
 A mistyped command, flag or `swp.config.json` key gets a suggestion (`Unknown command "sharde". Did you mean "swp shared"?`). Unknown flags and stray arguments exit 2.
 
@@ -139,7 +139,7 @@ permissions:
 
 ## GitHub Action
 
-Instead of installing the package and calling `npx swp pr`, a workflow can use the action ([full template](../templates/supabase-previews-action.yml)). It runs the project's installed `swp` when there is one, else `supabase-worker-previews@<version>`.
+Instead of installing the package and calling `npx supabase-worker-previews pr`, a workflow can use the action ([full template](../templates/supabase-previews-action.yml)). It runs the project's installed `swp` when there is one, else `supabase-worker-previews@<version>`.
 
 ```yaml
 - uses: actions/checkout@v4

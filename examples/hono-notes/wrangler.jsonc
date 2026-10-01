@@ -9,7 +9,7 @@
     "SUPABASE_PUBLISHABLE_KEY": "<production publishable key>",
     "SUPABASE_PROJECT_REF": "<production ref>",
   },
-  // Every Preview: the shared Preview database. `npx swp shared` prints these three values.
+  // Every Preview: the shared Preview database. `npx supabase-worker-previews shared` prints these three values.
   // Previews inherit no vars or bindings, so anything else the Worker binds is redeclared here too.
   "previews": {
     "vars": {

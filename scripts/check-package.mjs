@@ -77,13 +77,27 @@ try {
 
   const swp = join(consumer, "node_modules", ".bin", process.platform === "win32" ? "swp.cmd" : "swp");
   const help = run(swp, ["--help"], consumer);
-  check(help.status === 0 && help.stdout.includes("swp init"), "swp --help prints the usage and exits 0");
+  check(
+    help.status === 0 && help.stdout.includes("Usage: swp <command>"),
+    "swp --help prints the usage and exits 0",
+  );
   const helpCommand = run(swp, ["help"], consumer);
-  check(helpCommand.status === 0 && helpCommand.stdout.includes("swp init"), "swp help exits 0");
+  check(helpCommand.status === 0 && helpCommand.stdout.includes("Usage: swp <command>"), "swp help exits 0");
   const version = run(swp, ["--version"], consumer);
   check(
     version.status === 0 && version.stdout.trim() === packed.version,
     `swp --version prints ${packed.version}${version.status ? `\n${version.stderr}` : ""}`,
+  );
+  const longName = join(
+    consumer,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "supabase-worker-previews.cmd" : "supabase-worker-previews",
+  );
+  const longVersion = run(longName, ["--version"], consumer);
+  check(
+    longVersion.status === 0 && longVersion.stdout.trim() === packed.version,
+    "supabase-worker-previews --version runs the same CLI",
   );
   const unknown = run(swp, ["doctr"], consumer);
   check(

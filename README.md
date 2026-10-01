@@ -58,14 +58,14 @@ You need a Worker deployed by Workers Builds from a GitHub repo, wrangler 4.135.
 
 ```bash
 npm install --save-dev supabase-worker-previews
-npx swp init --project-ref <production project ref>
+npx supabase-worker-previews init --project-ref <production project ref>
 ```
 
 `init` writes `swp.config.json`, a grants migration and the PR workflow, and prints the rest. Then:
 
 1. Connect the Supabase GitHub integration (automatic branching on, deploy to production off).
 2. Add a `previews` block to your wrangler config.
-3. `npx swp shared` creates the shared Preview database and prints its `previews.vars`.
+3. `npx supabase-worker-previews shared` creates the shared Preview database and prints its `previews.vars`.
 4. Wrap the Worker:
 
    ```ts
@@ -77,7 +77,7 @@ npx swp init --project-ref <production project ref>
 
    and create the browser client from `readPublicConfig()`.
 
-5. Turn on Preview builds in Workers Builds, add three Actions secrets, run `npx swp doctor`, and open a PR.
+5. Turn on Preview builds in Workers Builds, add three Actions secrets, run `npx supabase-worker-previews doctor`, and open a PR.
 
 The **[full quickstart](docs/quickstart.md)** walks through every step with the dashboard settings and the output to expect. For a complete working project, see [`examples/hono-notes`](examples/hono-notes).
 
@@ -93,6 +93,8 @@ The **[full quickstart](docs/quickstart.md)** walks through every step with the 
 |                | `swp down`   | Delete a branch's Preview and its own database                                       |
 | **In CI**      | `swp pr`     | All of the above for a `pull_request` workflow, plus the PR comment and deployment   |
 |                | `swp prune`  | List leftovers of deleted branches and closed PRs; delete them with `--yes`          |
+
+`swp` is the short name once the package is installed; the full name `supabase-worker-previews` runs the same CLI. With `npx`, always use the full name: `npx swp` on a machine without this package installed downloads [an unrelated npm package named `swp`](https://www.npmjs.com/package/swp) that deletes dependency and build folders.
 
 `swp <command> --help` shows one command's flags and examples, and `swp --version` prints the version. Flags, environment variables, every `swp.config.json` field and the GitHub Action inputs are in the [configuration reference](docs/configuration.md).
 

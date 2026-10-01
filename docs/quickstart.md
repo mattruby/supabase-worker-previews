@@ -17,7 +17,7 @@ You need:
 
 ```bash
 npm install --save-dev supabase-worker-previews
-npx swp init --project-ref <production project ref>
+npx supabase-worker-previews init --project-ref <production project ref>
 ```
 
 The project ref is the subdomain of your project URL (`https://<ref>.supabase.co`). If the repo is linked with `supabase link`, `init` reads it from `supabase/.temp/project-ref` and you can omit the flag. `--trunk <branch>` overrides the trunk, which defaults to `origin/HEAD`, else `main`.
@@ -30,7 +30,7 @@ Expected output, in a repo that already has migrations:
   It is dated before your existing migrations. Production has not run it: apply it with
   `supabase db push --include-all`, or run the SQL once and `supabase migration repair --status applied 20260913235959`.
 + .github/workflows/supabase-previews.yml
-  It runs the installed swp (npx swp pr); `swp init --action` writes one that uses the published action.
+  It runs the installed swp (npx supabase-worker-previews pr); `swp init --action` writes one that uses the published action.
 
 Next, by hand (the full guide: https://github.com/mattruby/supabase-worker-previews/blob/main/docs/quickstart.md):
   1. Supabase dashboard, Project Settings, Integrations, GitHub: connect the repo, with
@@ -40,7 +40,7 @@ Next, by hand (the full guide: https://github.com/mattruby/supabase-worker-previ
 
 The numbered steps it prints are the rest of this guide. Without `--project-ref` (and without a `supabase link`), step 1 is `Set "supabaseProjectRef" in swp.config.json`.
 
-`init` never overwrites, so it is safe to run again. A file that already exists prints `- <file> exists, left alone`. `--dry-run` prints what it would write and writes nothing. `--action` writes a workflow that uses the published GitHub Action instead of `npx swp pr` (see [step 8](#8-add-the-github-actions-secrets)).
+`init` never overwrites, so it is safe to run again. A file that already exists prints `- <file> exists, left alone`. `--dry-run` prints what it would write and writes nothing. `--action` writes a workflow that uses the published GitHub Action instead of `npx supabase-worker-previews pr` (see [step 8](#8-add-the-github-actions-secrets)).
 
 **Apply the grants migration to production** as the message says. It is dated one second before your first migration so that branch databases run it before any table exists ([why](../skills/supabase-worker-previews/references/gotchas.md#supabase-branches)). Production already has its tables, so you either push it with `--include-all` or run the SQL once and mark it applied. If your first migration already grants default privileges to `anon`/`authenticated`, `init` says so and writes nothing.
 
@@ -111,8 +111,8 @@ CLOUDFLARE_ACCOUNT_ID=...
 [Tokens](tokens.md) lists the least-privilege scopes. Then:
 
 ```bash
-npx swp shared --dry-run   # "Dry run: reads only, changes nothing." then the plan
-npx swp shared
+npx supabase-worker-previews shared --dry-run   # "Dry run: reads only, changes nothing." then the plan
+npx supabase-worker-previews shared
 ```
 
 Expected output:
@@ -159,7 +159,7 @@ On the server, read Supabase settings from the handler's `env` (or `process.env`
 ## 6. Check the setup
 
 ```bash
-npx swp doctor
+npx supabase-worker-previews doctor
 ```
 
 Expected output when everything is in place:
@@ -193,7 +193,7 @@ New Workers use `npx wrangler preview` by default ([Cloudflare: build branches](
 
 ## 8. Add the GitHub Actions secrets
 
-In the repo: **Settings, Secrets and variables, Actions**, add `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The workflow `init` wrote (`.github/workflows/supabase-previews.yml`) passes them to `npx swp pr`, along with the job's `GITHUB_TOKEN`. It runs on `opened`, `synchronize`, `reopened`, `labeled`, `unlabeled` and `closed`, and grants the token:
+In the repo: **Settings, Secrets and variables, Actions**, add `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The workflow `init` wrote (`.github/workflows/supabase-previews.yml`) passes them to `npx supabase-worker-previews pr`, along with the job's `GITHUB_TOKEN`. It runs on `opened`, `synchronize`, `reopened`, `labeled`, `unlabeled` and `closed`, and grants the token:
 
 ```yaml
 permissions:
@@ -204,7 +204,7 @@ permissions:
 
 If a secret is missing, `swp pr` fails with an `::error::` naming the empty secrets (a bot's PR, such as Dependabot's, only gets a `::warning::`).
 
-To run the published GitHub Action instead of the installed CLI, run `npx swp init --action` before the workflow exists, or replace the setup-node, `npm ci` and `npx swp pr` steps with:
+To run the published GitHub Action instead of the installed CLI, run `npx supabase-worker-previews init --action` before the workflow exists, or replace the setup-node, `npm ci` and `npx supabase-worker-previews pr` steps with:
 
 ```yaml
 - uses: mattruby/supabase-worker-previews@v0

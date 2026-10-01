@@ -22,8 +22,8 @@ Find your symptom below, then follow its cause and fix. Each heading is phrased 
 Run these first:
 
 ```bash
-npx swp doctor                       # local files, plus the shared branch when SUPABASE_ACCESS_TOKEN is set
-npx swp check --branch <git branch>  # which database the Preview serves right now
+npx supabase-worker-previews doctor                       # local files, plus the shared branch when SUPABASE_ACCESS_TOKEN is set
+npx supabase-worker-previews check --branch <git branch>  # which database the Preview serves right now
 ```
 
 Then confirm with a real browser: open the Preview, sign in, and load a page that reads data. A deploy that exits 0 and a check that passes tell you which database the page names, not that signed-in reads work.
@@ -41,7 +41,7 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
 
 **Fix.**
 
-1. `npx swp doctor`. If it reports `the first migration (...) does not grant default privileges; branch databases will 403`, run `npx swp init`, which writes the grants migration dated before your first one, and apply it to production as `init` instructs.
+1. `npx supabase-worker-previews doctor`. If it reports `the first migration (...) does not grant default privileges; branch databases will 403`, run `npx supabase-worker-previews init`, which writes the grants migration dated before your first one, and apply it to production as `init` instructs.
 2. Make sure the Supabase GitHub integration is connected (Project Settings, Integrations, GitHub) before any branch is created. With `SUPABASE_ACCESS_TOKEN` set, `doctor` checks this:
    - `branching is not enabled on <ref>` when the project has no default branch.
    - `✓ Supabase builds "<branch>" from GitHub <owner>/<repo>, so branches run the repo's migrations` when it finds proof of the connection.
@@ -51,7 +51,7 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
 
 3. Rebuild the broken branch so it runs the migrations from scratch:
    - **A PR's branch:** close and reopen the PR. The integration deletes the branch on close and creates it again on reopen. Closing also runs `swp down`, which deletes the Preview, so push a commit afterwards to have Workers Builds recreate it.
-   - **The shared `preview` branch:** persistent branches refuse `DELETE`, so first `PATCH /v1/branches/{ref}` with `{"persistent": false}`, then delete it, then run `npx swp shared` again and paste the new `previews.vars`.
+   - **The shared `preview` branch:** persistent branches refuse `DELETE`, so first `PATCH /v1/branches/{ref}` with `{"persistent": false}`, then delete it, then run `npx supabase-worker-previews shared` again and paste the new `previews.vars`.
 
 ## My Preview shows production data
 
@@ -63,7 +63,7 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
 
 | Cause                                                                                                                                                                                                                                                                                     | How to tell                                                                                                                                                                                                                                          | Fix                                                                                                                             |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `previews.vars` names production                                                                                                                                                                                                                                                          | `doctor`: `previews.vars points at the production project <ref>`                                                                                                                                                                                     | Run `npx swp shared` and paste its output into `previews.vars`                                                                  |
+| `previews.vars` names production                                                                                                                                                                                                                                                          | `doctor`: `previews.vars points at the production project <ref>`                                                                                                                                                                                     | Run `npx supabase-worker-previews shared` and paste its output into `previews.vars`                                             |
 | `previews.vars` is empty, so the Worker has no `SUPABASE_URL` and injects nothing, and the browser falls back to build-time `VITE_*` values that point at production                                                                                                                      | `doctor`: `previews.vars needs SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY`; in the browser, `window.__SUPABASE_PUBLIC__` is undefined                                                                                                                 | Fill `previews.vars`. Keep production values out of the build environment Preview builds see                                    |
 | The HTML never passes through the Worker. With [static assets](https://developers.cloudflare.com/workers/static-assets/binding/#run_worker_first), a request that matches an asset (such as an SPA's `index.html`) is served without invoking the Worker unless `run_worker_first` is set | `doctor` warns `<dir> has <files>.html; Cloudflare serves matching assets without running the Worker, ...` when the assets directory holds HTML and `run_worker_first` is unset; `view-source:` on the Preview shows no `__SUPABASE_PUBLIC__` script | Set `assets.run_worker_first` to `true`, or to route patterns that cover your HTML                                              |
 | The Worker's default export is not wrapped                                                                                                                                                                                                                                                | `curl <preview>/.well-known/supabase-preview` returns your app's 404 or HTML, not JSON                                                                                                                                                               | `export default withSupabasePreviews(handler)`                                                                                  |
@@ -78,7 +78,7 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
 
 - **The base config changed after the Preview was created.** A Preview copies the base config once, at creation, and redeploying does not refresh it ([Cloudflare: configuration](https://developers.cloudflare.com/workers/previews/configuration/)). This matters after `swp shared` rewrites the shared branch's secret key. Delete only the Preview with `npx wrangler preview delete --name <branch> --worker-name <worker>` and push the branch again. (`swp down` also deletes the branch's own Supabase database, if it has one.)
 - **`previews.vars` changed but the branch has not rebuilt.** `previews.vars` is read on each Preview deploy. Merge or rebase the trunk into the branch and push.
-- **A PR's `SUPABASE_OVERRIDE` points at a branch that was recreated.** Re-run the workflow, or run `npx swp up --branch <b>`, which writes a fresh override.
+- **A PR's `SUPABASE_OVERRIDE` points at a branch that was recreated.** Re-run the workflow, or run `npx supabase-worker-previews up --branch <b>`, which writes a fresh override.
 - **The PR no longer needs its own database, but its override remains.** `swp pr` removes `SUPABASE_OVERRIDE` (and the branch `up` made) on its next run on the shared path. If the label was removed, that run is triggered by `unlabeled`; a workflow written before that trigger was added needs it in `on.pull_request.types`. Look for `removed SUPABASE_OVERRIDE from Preview <name>; it serves preview again` in the log. By hand: `npx wrangler preview secret delete SUPABASE_OVERRIDE --name <preview> --worker-name <worker>`.
 - **Just recreated.** After a delete and recreate, the hostname served the old version for a few seconds. Wait and re-run `check`.
 
@@ -101,7 +101,7 @@ The Preview of <branch> never served <want> (<ref>); last saw <seen>
 
 Other errors from `check` and `up`:
 
-- `No Supabase branch for <want> on <ref>`: for the shared case, run `npx swp shared`. For a PR that needs its own database, the integration has not created the branch; check that automatic branching is on and the Supabase directory setting matches `supabaseDir`.
+- `No Supabase branch for <want> on <ref>`: for the shared case, run `npx supabase-worker-previews shared`. For a PR that needs its own database, the integration has not created the branch; check that automatic branching is on and the Supabase directory setting matches `supabaseDir`.
 - `No deployed Preview <name> appeared; is a Preview being deployed for it?`: `up` waited 10 minutes for the Preview to be deployed. Same fixes as `no Preview yet`.
 
 Workers Builds names a Preview after the raw git branch (`feat/x`), and Cloudflare derives the slug (`feat-x`). `swp` matches on the raw name first, then the slug. The dashboard accepted only a literal `npx wrangler preview` as the Preview command when measured; a custom `--name` breaks the match.
@@ -176,7 +176,7 @@ or ends at once with `Supabase branch <ref> ended MIGRATIONS_FAILED` (or `FUNCTI
 
 | Advice                                                                                | Fix                                                                                                             |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `Project <ref> has reached its branch limit. ...`                                     | `npx swp prune` lists leftover branches; delete them with `--yes`, or raise the limit                           |
+| `Project <ref> has reached its branch limit. ...`                                     | `npx supabase-worker-previews prune` lists leftover branches; delete them with `--yes`, or raise the limit      |
 | `The organization's plan does not allow persistent branches` / `does not include ...` | Upgrade the plan (the message carries Supabase's upgrade URL when it sends one)                                 |
 | `The Supabase access token is invalid or expired.`                                    | Create a new token                                                                                              |
 | `The Supabase access token cannot create branches on <ref>; ...`                      | Use an organization-scoped token with branch write access ([tokens](tokens.md))                                 |
@@ -218,7 +218,7 @@ The comment and deployment never fail the job. Look for `::warning::PR comment s
 
 ## Still stuck
 
-Run the failing command again with `SWP_DEBUG=1` to print the stack trace, then open an [issue](https://github.com/mattruby/supabase-worker-previews/issues/new/choose) with it, the output of `npx swp doctor` and the failing log. If you found a platform behaviour that disagrees with [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md), say what you ran and what you saw.
+Run the failing command again with `SWP_DEBUG=1` to print the stack trace, then open an [issue](https://github.com/mattruby/supabase-worker-previews/issues/new/choose) with it, the output of `npx supabase-worker-previews doctor` and the failing log. If you found a platform behaviour that disagrees with [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md), say what you ran and what you saw.
 
 ---
 

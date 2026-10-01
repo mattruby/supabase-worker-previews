@@ -27,7 +27,7 @@ body:
     id: doctor
     attributes:
       label: "`swp doctor` output"
-      description: Run `npx swp doctor` in the project (with SUPABASE_ACCESS_TOKEN set if you can, for the online checks) and paste the output. Remove secrets first.
+      description: Run `npx supabase-worker-previews doctor` in the project (with SUPABASE_ACCESS_TOKEN set if you can, for the online checks) and paste the output. Remove secrets first.
       render: text
     validations:
       required: true

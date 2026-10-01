@@ -132,7 +132,7 @@ export function init(options: InitOptions = {}, cwd = process.cwd()): void {
     log(
       options.action
         ? "  It uses the published action, mattruby/supabase-worker-previews@v0."
-        : "  It runs the installed swp (npx swp pr); `swp init --action` writes one that uses the published action.",
+        : "  It runs `npx supabase-worker-previews pr`; `npx supabase-worker-previews init --action` writes one that uses the published action instead.",
     );
   }
 
@@ -149,13 +149,13 @@ export function init(options: InitOptions = {}, cwd = process.cwd()): void {
       : [`Add a "previews" block to ${wrangler.file}, redeclaring every binding the Worker uses.`]),
     "Put SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in .env.swp\n" +
       `(git-ignore it; scopes: ${TOKENS_URL}),\n` +
-      "then run `npx swp shared` and paste the previews.vars it prints.",
+      "then run `npx supabase-worker-previews shared` and paste the previews.vars it prints.",
     "Wrap the Worker's default export:\n" +
       '  import { withSupabasePreviews } from "supabase-worker-previews";\n' +
       "  export default withSupabasePreviews(app);",
     "Workers Builds: turn on non-production branch builds, deploy command `npx wrangler preview`.",
     "GitHub repo, Settings, Secrets and variables, Actions: add the same three tokens.",
-    "Run `npx swp doctor` until it passes, then commit and open a PR.",
+    "Run `npx supabase-worker-previews doctor` until it passes, then commit and open a PR.",
   ];
   log(`\nNext, by hand (the full guide: ${QUICKSTART_URL}):`);
   steps.forEach((step, i) => log(`  ${i + 1}. ${step.replace(/\n/g, "\n     ")}`));

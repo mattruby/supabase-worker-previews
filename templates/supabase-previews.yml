@@ -30,7 +30,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npx swp pr
+      - run: npx supabase-worker-previews pr
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

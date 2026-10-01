@@ -311,7 +311,7 @@ describe("init", () => {
       trunk: "main",
     });
     expect(readFileSync(join(dir, ".github/workflows/supabase-previews.yml"), "utf8")).toContain(
-      "npx swp pr",
+      "npx supabase-worker-previews pr",
     );
   });
 
@@ -336,10 +336,10 @@ describe("init", () => {
     init({ log: (l) => lines.push(l) }, project({ "wrangler.jsonc": wrangler(null) }));
     const text = lines.join("\n");
     expect(text).toContain("docs/quickstart.md");
-    expect(text).toContain("npx swp shared");
-    expect(text).toContain("npx swp doctor");
+    expect(text).toContain("npx supabase-worker-previews shared");
+    expect(text).toContain("npx supabase-worker-previews doctor");
     expect(text).toContain("withSupabasePreviews(app)");
-    expect(text).toContain("swp init --action");
+    expect(text).toContain("npx supabase-worker-previews init --action");
     expect(text).toMatch(/1\. Set "supabaseProjectRef"/);
     expect(text).toMatch(/Add a "previews" block to wrangler.jsonc/);
 

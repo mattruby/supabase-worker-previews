@@ -19,7 +19,17 @@ export default defineConfig(
   },
   {
     files: ["test/**"],
-    rules: { "@typescript-eslint/require-await": "off" },
+    rules: {
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+    },
+  },
+  {
+    files: ["test/**/*.test-d.ts"],
+    rules: {
+      "@typescript-eslint/unbound-method": "off",
+      "@typescript-eslint/restrict-template-expressions": "off",
+    },
   },
   {
     files: ["**/*.mjs"],

@@ -6,12 +6,16 @@ import {
   check,
   down,
   enableBranching,
+  isDisposable,
+  previewKey,
+  release,
   servedRef,
   shared,
   up,
   waitForMigrations,
   type Deps,
 } from "../src/commands/branches.js";
+import { pr, type PullRequestEvent } from "../src/commands/pr.js";
 import type { Runner } from "../src/run.js";
 import type { Branch, SupabaseApi } from "../src/supabase.js";
 
@@ -28,6 +32,8 @@ const config: Config = {
   supabaseDir: "supabase",
   isolatedLabel: "isolated-db",
   checkPath: "/",
+  previewName: "branch",
+  apiKeys: "legacy",
 };
 
 const main: Branch = { id: "0", name: "main", project_ref: PARENT, is_default: true, status: "" };
@@ -92,11 +98,13 @@ function record(name: string, deployed = true): PreviewRecord {
 
 function fakeCloudflare(
   previews: PreviewRecord[] = [record("feat/x"), record("feat/Notes"), record("main")],
+  secrets: Record<string, string[]> = {},
 ) {
   const calls = {
     preview: [] as { name: string; secrets: Record<string, string> }[],
     base: [] as Record<string, string>[],
     deleted: [] as string[],
+    secretsDeleted: [] as string[],
   };
   const cloudflare = {
     workersSubdomain: async () => "acme",
@@ -105,6 +113,9 @@ function fakeCloudflare(
     putBaseSecrets: (secrets: Record<string, string>) => calls.base.push(secrets),
     findPreview: async (branch: string) => matchPreview(previews, branch),
     deletePreview: (name: string) => calls.deleted.push(name),
+    listPreviews: async () => previews,
+    listPreviewSecrets: (name: string) => secrets[name] ?? [],
+    deletePreviewSecret: (name: string, key: string) => calls.secretsDeleted.push(`${name} ${key}`),
   } as unknown as CloudflareApi;
   return { cloudflare, calls };
 }
@@ -302,6 +313,84 @@ describe("down", () => {
   });
 });
 
+describe("release", () => {
+  const own: Branch = { id: "2", name: "feat/x", project_ref: OWN, git_branch: "feat/x", status: "" };
+  const withOverride = { "feat/x": ["SUPABASE_OVERRIDE", "OTHER"] };
+
+  it("drops the override, then deletes the branch up made", async () => {
+    const order: string[] = [];
+    const s = fakeSupabase([main, sharedBranch, own], {
+      deleteBranch: async (ref: string) => order.push(`branch ${ref}`),
+    });
+    const c = fakeCloudflare(undefined, withOverride);
+    const cf = c.cloudflare as unknown as { deletePreviewSecret: (n: string, k: string) => void };
+    const deleteSecret = cf.deletePreviewSecret;
+    cf.deletePreviewSecret = (n, k) => {
+      order.push(`secret ${n}`);
+      deleteSecret(n, k);
+    };
+    await release("feat/x", deps(s.supabase, c.cloudflare));
+    expect(c.calls.secretsDeleted).toEqual(["feat/x SUPABASE_OVERRIDE"]);
+    expect(order).toEqual(["secret feat/x", `branch ${OWN}`]);
+  });
+
+  it("leaves a Preview without an override and a branch-less PR alone", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const c = fakeCloudflare();
+    await release("feat/x", deps(s.supabase, c.cloudflare));
+    expect(c.calls.secretsDeleted).toEqual([]);
+    expect(s.log.deleted).toEqual([]);
+  });
+
+  it("only prints in a dry run", async () => {
+    const s = fakeSupabase([main, sharedBranch, own]);
+    const c = fakeCloudflare(undefined, withOverride);
+    await release("feat/x", deps(s.supabase, c.cloudflare, { runner: { ...quietRunner, dryRun: true } }));
+    expect(c.calls.secretsDeleted).toEqual([]);
+    expect(s.log.deleted).toEqual([]);
+  });
+
+  it.each([
+    ["a persistent branch", { persistent: true }],
+    ["the shared branch by name", { name: "preview" }],
+    ["a branch tracking the trunk", { git_branch: "main" }],
+    ["the production project", { project_ref: PARENT }],
+  ])("never deletes %s", async (_what, patch) => {
+    const branch = { ...own, ...patch };
+    const gitBranch = branch.git_branch!;
+    const s = fakeSupabase([main, branch]);
+    await release(gitBranch, deps(s.supabase, fakeCloudflare().cloudflare));
+    expect(s.log.deleted).toEqual([]);
+  });
+
+  it("isDisposable rejects the default branch", () => {
+    expect(isDisposable({ ...own, is_default: true }, config)).toBe(false);
+    expect(isDisposable(own, config)).toBe(true);
+  });
+});
+
+describe("pr", () => {
+  const own: Branch = { id: "2", name: "feat/x", project_ref: OWN, git_branch: "feat/x", status: "" };
+  const event = (labels: string[]): PullRequestEvent => ({
+    action: "unlabeled",
+    number: 7,
+    pull_request: { head: { ref: "feat/x", sha: "abc" }, labels: labels.map((name) => ({ name })) },
+    repository: { full_name: "o/r" },
+  });
+  const fetchImpl = (async (url: string) =>
+    url.startsWith("https://api.github.com/")
+      ? Response.json([{ filename: "src/app.ts" }])
+      : Response.json({ projectRef: SHARED })) as unknown as typeof fetch;
+
+  it("puts a PR that lost its label back on the shared database", async () => {
+    const s = fakeSupabase([main, sharedBranch, own]);
+    const c = fakeCloudflare(undefined, { "feat/x": ["SUPABASE_OVERRIDE"] });
+    await pr(event([]), { ...deps(s.supabase, c.cloudflare, { fetchImpl }), githubToken: "t" });
+    expect(c.calls.secretsDeleted).toEqual(["feat/x SUPABASE_OVERRIDE"]);
+    expect(s.log.deleted).toEqual([OWN]);
+  });
+});
+
 describe("waitForMigrations", () => {
   it("waits until the branch holds every local migration", async () => {
     let n = 0;
@@ -329,6 +418,41 @@ describe("waitForMigrations", () => {
     await expect(waitForMigrations(OWN, deps(s.supabase, fakeCloudflare().cloudflare))).rejects.toThrow(
       /MIGRATIONS_FAILED/,
     );
+  });
+});
+
+describe("previewName pr", () => {
+  const prConfig: Config = { ...config, previewName: "pr" };
+  const own: Branch = { id: "2", name: "feat/x", project_ref: OWN, git_branch: "feat/x", status: "" };
+  const previews = () => [record("feat/x"), record("pr-12")];
+
+  it("names the Preview after the PR, or after the branch by default", () => {
+    expect(previewKey("feat/x", config, 12)).toBe("feat/x");
+    expect(previewKey("feat/x", prConfig, 12)).toBe("pr-12");
+    expect(() => previewKey("feat/x", prConfig)).toThrow(/--pr/);
+  });
+
+  it("gives pr-<n> the override while the database stays tied to the git branch", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const c = fakeCloudflare(previews());
+    await up("feat/x", deps(s.supabase, c.cloudflare, { config: prConfig }), 12);
+    expect(s.log.created).toEqual([{ name: "feat/x", gitBranch: "feat/x" }]);
+    expect(c.calls.preview.map((p) => p.name)).toEqual(["pr-12"]);
+  });
+
+  it("checks and deletes pr-<n>", async () => {
+    const seen: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      seen.push(url);
+      return Response.json({ projectRef: OWN });
+    }) as unknown as typeof fetch;
+    const s = fakeSupabase([main, sharedBranch, own]);
+    const c = fakeCloudflare(previews());
+    await check("feat/x", true, deps(s.supabase, c.cloudflare, { config: prConfig, fetchImpl }), 12);
+    expect(seen[0]).toMatch(/^https:\/\/pr-12-app/);
+    await down("feat/x", deps(s.supabase, c.cloudflare, { config: prConfig }), 12);
+    expect(c.calls.deleted).toEqual(["pr-12"]);
+    expect(s.log.deleted).toEqual([OWN]);
   });
 });
 

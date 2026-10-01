@@ -1,4 +1,4 @@
-import { branchFor, type Deps } from "./commands/branches.js";
+import { branchFor, previewKey, type Deps } from "./commands/branches.js";
 import type { PullRequestEvent } from "./commands/pr.js";
 import { GitHubApi, type Deployment } from "./github.js";
 
@@ -178,7 +178,9 @@ export class Feedback {
   }
 
   private async previewUrl(): Promise<string | undefined> {
-    const preview = await this.deps.cloudflare.findPreview(this.branch).catch(() => undefined);
+    const preview = await this.deps.cloudflare
+      .findPreview(previewKey(this.branch, this.deps.config, this.event.number))
+      .catch(() => undefined);
     return preview?.urls[0]?.replace(/\/+$/, "");
   }
 

@@ -20,6 +20,8 @@ const config: Config = {
   supabaseDir: "supabase",
   isolatedLabel: "isolated-db",
   checkPath: "/",
+  previewName: "branch",
+  apiKeys: "legacy",
 };
 
 const branches: Branch[] = [
@@ -111,6 +113,8 @@ function deps(fetchImpl: typeof fetch, extra: Partial<FeedbackDeps> = {}, withOw
     cloudflare: {
       findPreview: async (b: string) => matchPreview(previews, b),
       deletePreview: () => {},
+      listPreviewSecrets: () => [],
+      deletePreviewSecret: () => {},
     } as unknown as CloudflareApi,
     migrationCount: () => 0,
     sleep: async () => {},

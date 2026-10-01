@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { migrationFiles, migrationsDir, readWranglerConfig, type Config } from "../config.js";
 import { projectRefOf } from "../runtime.js";
-import type { SupabaseApi } from "../supabase.js";
+import type { Branch, SupabaseApi } from "../supabase.js";
 
 export type Finding = { level: "ok" | "warn" | "error"; message: string };
 
@@ -52,8 +52,6 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
 
   const wrangler = readWranglerConfig(cwd);
   if (!wrangler) error("no wrangler.jsonc, wrangler.json or wrangler.toml");
-  else if (!wrangler.json)
-    warn(`${wrangler.file}: TOML is not checked; use wrangler.jsonc to have the previews block verified`);
   else {
     const previews = wrangler.json.previews as Record<string, unknown> | undefined;
     if (!previews) error(`${wrangler.file} has no "previews" block, so Previews get no Supabase settings`);
@@ -119,6 +117,12 @@ export async function checkRemote(
       message: `branching is not enabled on ${parent} (connect the Supabase GitHub integration)`,
     });
   const shared = branches.find((b) => b.name === config.sharedBranch);
+  const finding = await githubFinding(
+    branches.filter((b) => !b.is_default && b.project_ref !== parent),
+    shared,
+    supabase,
+  );
+  if (finding) out.push(finding);
   if (!shared) {
     out.push({ level: "error", message: `no "${config.sharedBranch}" branch; run \`swp shared\`` });
     return out;
@@ -131,7 +135,7 @@ export async function checkRemote(
       level: "error",
       message: `"${config.sharedBranch}" tracks ${shared.git_branch ?? "no git branch"}, not ${config.trunk}`,
     });
-  const vars = (readWranglerConfig(cwd)?.json?.previews as { vars?: Record<string, string> } | undefined)
+  const vars = (readWranglerConfig(cwd)?.json.previews as { vars?: Record<string, string> } | undefined)
     ?.vars;
   const varsRef = projectRefOf(vars?.SUPABASE_URL);
   if (varsRef && varsRef !== shared.project_ref)
@@ -145,6 +149,39 @@ export async function checkRemote(
       message: `"${config.sharedBranch}" (${shared.project_ref}) tracks ${config.trunk}`,
     });
   return out;
+}
+
+/**
+ * The Management API does not say whether a project is connected to GitHub.
+ * Runs the integration made carry the repo in `git_config`, so look for one.
+ */
+async function githubFinding(
+  branches: Branch[],
+  shared: Branch | undefined,
+  supabase: SupabaseApi,
+): Promise<Finding | null> {
+  const ordered = [...(shared ? [shared] : []), ...branches.filter((b) => b !== shared)].slice(0, 5);
+  if (!ordered.length) return null;
+  let runs = 0;
+  for (const branch of ordered) {
+    const list = await supabase.actionRuns(branch.project_ref).catch(() => null);
+    if (!list) continue;
+    runs += list.length;
+    const git = list.find((r) => r.git_config?.repo)?.git_config;
+    if (git)
+      return {
+        level: "ok",
+        message: `Supabase builds "${branch.name}" from GitHub ${git.owner}/${git.repo}, so branches run the repo's migrations`,
+      };
+  }
+  const names = ordered.map((b) => `"${b.name}"`).join(", ");
+  return {
+    level: "warn",
+    message:
+      `cannot confirm the Supabase GitHub integration: ${runs ? `none of the ${runs} runs` : "no runs"} on ${names} came from GitHub. ` +
+      "Branching without Git copies the schema without privileges, so signed-in reads 403. " +
+      "Connect the repo under Integrations, GitHub; if it is connected, push to the trunk and run doctor again",
+  };
 }
 
 function installedWranglerVersion(cwd: string): string | null {

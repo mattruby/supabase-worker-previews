@@ -104,6 +104,7 @@ Handlers receive `env` with the override applied, and so does `process.env` unde
 | `swp check --branch <b> [--isolated]` | Fail unless the Preview serves the right database; fail at once on production                                             |
 | `swp down --branch <b>`               | Delete the Preview and its own database                                                                                   |
 | `swp pr`                              | Inside a `pull_request` workflow: `down` on close, else `up` when needed, then `check`                                    |
+| `swp prune [--repo <r>] [--yes]`      | List leftovers (git branch deleted, or its PR closed) and delete them with `--yes`                                        |
 
 <!-- TODO(prune): add the `swp prune` row once merged. -->
 
@@ -121,6 +122,8 @@ Handlers receive `env` with the override applied, and so does `process.env` unde
 | `isolatedLabel`      | `isolated-db`   | PR label that asks for one anyway                    |
 | `checkPath`          | `/`             | Page `check` scans when the identity route is absent |
 | `workersSubdomain`   | looked up       | Your `*.workers.dev` subdomain                       |
+| `previewName`        | `branch`        | `pr` finds Previews named `pr-<n>` (pass `--pr <n>`) |
+| `apiKeys`            | `legacy`        | API keys to prefer: `legacy` or `new` (`sb_...`)     |
 
 <!-- TODO(preview-name-pr): add the `previewName` field (`"pr"` naming) once merged. -->
 

@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse as parseToml } from "smol-toml";
 import { parseJsonc } from "./jsonc.js";
 
 export const CONFIG_FILE = "swp.config.json";
@@ -21,6 +22,10 @@ export type Config = {
   isolatedLabel: string;
   /** Path `check` fetches when the Worker does not serve the identity route. */
   checkPath: string;
+  /** How Previews are named: after the raw git branch (Workers Builds), or `pr-<number>`. */
+  previewName: "branch" | "pr";
+  /** Which Supabase API keys to hand a Preview when a project has both kinds. */
+  apiKeys: "legacy" | "new";
   /** `swp pr` keeps one status comment on the PR. Default true. */
   prComment?: boolean;
   /** `swp pr` records a GitHub deployment for the PR head. Default true. */
@@ -29,7 +34,7 @@ export type Config = {
   deploymentEnvironment?: string;
 };
 
-export type WranglerConfig = { file: string; json: Record<string, unknown> | null; name?: string };
+export type WranglerConfig = { file: string; json: Record<string, unknown>; name?: string };
 
 const DEFAULTS = {
   trunk: "main",
@@ -37,16 +42,22 @@ const DEFAULTS = {
   supabaseDir: "supabase",
   isolatedLabel: "isolated-db",
   checkPath: "/",
+  previewName: "branch",
+  apiKeys: "legacy",
 };
+
+const CHOICES = { previewName: ["branch", "pr"], apiKeys: ["legacy", "new"] } as const;
 
 export function readWranglerConfig(cwd = process.cwd()): WranglerConfig | null {
   const file = WRANGLER_FILES.find((f) => existsSync(join(cwd, f)));
   if (!file) return null;
   const text = readFileSync(join(cwd, file), "utf8");
-  if (file.endsWith(".toml")) {
-    return { file, json: null, name: /^\s*name\s*=\s*"([^"]+)"/m.exec(text)?.[1] };
+  let json: Record<string, unknown>;
+  try {
+    json = (file.endsWith(".toml") ? parseToml(text) : parseJsonc(text)) as Record<string, unknown>;
+  } catch (err) {
+    throw new Error(`Cannot parse ${file}: ${(err as Error).message}`, { cause: err });
   }
-  const json = parseJsonc(text) as Record<string, unknown>;
   return { file, json, name: typeof json.name === "string" ? json.name : undefined };
 }
 
@@ -59,6 +70,11 @@ export function loadConfig(overrides: Partial<Config> = {}, cwd = process.cwd())
     throw new Error(`No worker name: set "worker" in ${CONFIG_FILE} or "name" in the wrangler config`);
   if (!merged.supabaseProjectRef)
     throw new Error(`Set "supabaseProjectRef" (the production project) in ${CONFIG_FILE}`);
+  for (const [key, allowed] of Object.entries(CHOICES)) {
+    const value = merged[key as keyof typeof CHOICES];
+    if (!(allowed as readonly string[]).includes(value))
+      throw new Error(`"${key}" in ${CONFIG_FILE} must be ${allowed.map((a) => `"${a}"`).join(" or ")}`);
+  }
   return merged as Config;
 }
 

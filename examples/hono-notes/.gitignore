@@ -1,5 +1,5 @@
 node_modules
 .wrangler
 .dev.vars
-.env.swp
+.env.supabase-worker-previews
 package-lock.json

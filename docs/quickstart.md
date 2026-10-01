@@ -25,12 +25,12 @@ The project ref is the subdomain of your project URL (`https://<ref>.supabase.co
 Expected output, in a repo that already has migrations:
 
 ```text
-+ swp.config.json
++ supabase-worker-previews.json
 + supabase/migrations/20260913235959_api_default_privileges.sql
   It is dated before your existing migrations. Production has not run it: apply it with
   `supabase db push --include-all`, or run the SQL once and `supabase migration repair --status applied 20260913235959`.
 + .github/workflows/supabase-previews.yml
-  It runs the installed swp (npx supabase-worker-previews pr); `swp init --action` writes one that uses the published action.
+  It runs the installed supabase-worker-previews (npx supabase-worker-previews pr); `supabase-worker-previews init --action` writes one that uses the published action.
 
 Next, by hand (the full guide: https://github.com/mattruby/supabase-worker-previews/blob/main/docs/quickstart.md):
   1. Supabase dashboard, Project Settings, Integrations, GitHub: connect the repo, with
@@ -38,7 +38,7 @@ Next, by hand (the full guide: https://github.com/mattruby/supabase-worker-previ
   ...
 ```
 
-The numbered steps it prints are the rest of this guide. Without `--project-ref` (and without a `supabase link`), step 1 is `Set "supabaseProjectRef" in swp.config.json`.
+The numbered steps it prints are the rest of this guide. Without `--project-ref` (and without a `supabase link`), step 1 is `Set "supabaseProjectRef" in supabase-worker-previews.json`.
 
 `init` never overwrites, so it is safe to run again. A file that already exists prints `- <file> exists, left alone`. `--dry-run` prints what it would write and writes nothing. `--action` writes a workflow that uses the published GitHub Action instead of `npx supabase-worker-previews pr` (see [step 8](#8-add-the-github-actions-secrets)).
 
@@ -60,7 +60,7 @@ In the Supabase dashboard: **Project Settings, Integrations, GitHub Integration*
 
 Supabase documents these options in [Branching via GitHub](https://supabase.com/docs/guides/deployment/branching/github-integration).
 
-Connecting the repo with automatic branching on is what enables branching on the project. Do this **before** `swp shared`, which refuses a project without branching: `Branching is not enabled on <ref>. Connect the repo in the Supabase dashboard (...), then run swp shared again.` A branch created through the API on a project that is not linked to GitHub copies the schema without privileges, and every signed-in read 403s ([measured](../skills/supabase-worker-previews/references/gotchas.md#supabase-branches)).
+Connecting the repo with automatic branching on is what enables branching on the project. Do this **before** `supabase-worker-previews shared`, which refuses a project without branching: `Branching is not enabled on <ref>. Connect the repo in the Supabase dashboard (...), then run supabase-worker-previews shared again.` A branch created through the API on a project that is not linked to GitHub copies the schema without privileges, and every signed-in read 403s ([measured](../skills/supabase-worker-previews/references/gotchas.md#supabase-branches)).
 
 Then, in `supabase/config.toml`, allow your Preview hostnames as auth redirects. The integration re-applies `config.toml` to branches on every push, so a URL set only in the dashboard does not last:
 
@@ -100,7 +100,7 @@ Leave `previews.vars` empty for now; the next step prints its values.
 
 ## 4. Create the shared Preview database
 
-Put the tokens in `.env.swp` (git-ignore it), which every `swp` command loads when present:
+Put the tokens in `.env.supabase-worker-previews` (git-ignore it), which every `supabase-worker-previews` command loads when present:
 
 ```bash
 SUPABASE_ACCESS_TOKEN=sbp_...
@@ -177,7 +177,7 @@ Supabase (online, project <prod ref>)
 All checks passed.
 ```
 
-`✗` lines fail the command (exit 1); `!` lines are warnings. Every `✗` and `!` has a line starting with `→` under it that says how to fix it, and the last line counts them, for example `1 error, 2 warnings. Fix the errors and run swp doctor again.` The GitHub line comes from the branch's Supabase action runs; if none of them came from GitHub yet, doctor warns `cannot confirm the Supabase GitHub integration` (see [troubleshooting](troubleshooting.md#signed-in-reads-fail-with-403-or-permission-denied)). If your assets directory holds HTML and `assets.run_worker_first` is unset, doctor warns that those pages would get no Supabase config. Without `SUPABASE_ACCESS_TOKEN` it checks only the local files and prints `- skipped: SUPABASE_ACCESS_TOKEN is not set. ...` under the Supabase heading.
+`✗` lines fail the command (exit 1); `!` lines are warnings. Every `✗` and `!` has a line starting with `→` under it that says how to fix it, and the last line counts them, for example `1 error, 2 warnings. Fix the errors and run supabase-worker-previews doctor again.` The GitHub line comes from the branch's Supabase action runs; if none of them came from GitHub yet, doctor warns `cannot confirm the Supabase GitHub integration` (see [troubleshooting](troubleshooting.md#signed-in-reads-fail-with-403-or-permission-denied)). If your assets directory holds HTML and `assets.run_worker_first` is unset, doctor warns that those pages would get no Supabase config. Without `SUPABASE_ACCESS_TOKEN` it checks only the local files and prints `- skipped: SUPABASE_ACCESS_TOKEN is not set. ...` under the Supabase heading.
 
 ## 7. Turn on Preview builds
 
@@ -189,7 +189,7 @@ In the Cloudflare dashboard: **Workers and Pages, your Worker, Settings, Builds*
 | Non-production branch builds  | **enabled**            |
 | Non-production deploy command | `npx wrangler preview` |
 
-New Workers use `npx wrangler preview` by default ([Cloudflare: build branches](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/)). Use that literal command: the dashboard accepted nothing else when measured, and `swp` finds Previews by raw branch name for that reason. Keep the Worker's preview URLs turned on; turning them off takes every Preview down.
+New Workers use `npx wrangler preview` by default ([Cloudflare: build branches](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/)). Use that literal command: the dashboard accepted nothing else when measured, and `supabase-worker-previews` finds Previews by raw branch name for that reason. Keep the Worker's preview URLs turned on; turning them off takes every Preview down.
 
 ## 8. Add the GitHub Actions secrets
 
@@ -202,7 +202,7 @@ permissions:
   deployments: write # the GitHub deployment
 ```
 
-If a secret is missing, `swp pr` fails with an `::error::` naming the empty secrets (a bot's PR, such as Dependabot's, only gets a `::warning::`).
+If a secret is missing, `supabase-worker-previews pr` fails with an `::error::` naming the empty secrets (a bot's PR, such as Dependabot's, only gets a `::warning::`).
 
 To run the published GitHub Action instead of the installed CLI, run `npx supabase-worker-previews init --action` before the workflow exists, or replace the setup-node, `npm ci` and `npx supabase-worker-previews pr` steps with:
 
@@ -214,7 +214,7 @@ To run the published GitHub Action instead of the installed CLI, run `npx supaba
     cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
-It runs the project's installed `swp` when there is one, else downloads `supabase-worker-previews@0`. [templates/supabase-previews-action.yml](../templates/supabase-previews-action.yml) is the full workflow.
+It runs the project's installed `supabase-worker-previews` when there is one, else downloads `supabase-worker-previews@0`. [templates/supabase-previews-action.yml](../templates/supabase-previews-action.yml) is the full workflow.
 
 Commit `previews.vars`, the wrapped Worker and `config.toml`, and push to the trunk. The integration migrates the `preview` branch on trunk pushes.
 
@@ -228,7 +228,7 @@ PR #12 (feat/header): the shared "preview" database
   Preview feat-header runs on preview (<preview ref>)
 ```
 
-**A PR that changes `supabase/`** (or carries the `isolated-db` label). The integration creates a branch database, migrates and seeds it from the PR, and `swp pr` points the Preview at it:
+**A PR that changes `supabase/`** (or carries the `isolated-db` label). The integration creates a branch database, migrates and seeds it from the PR, and `supabase-worker-previews pr` points the Preview at it:
 
 ```text
 PR #13 (feat/notes): its own database
@@ -240,13 +240,13 @@ Done: https://feat-notes-my-app.<subdomain>.workers.dev now runs on <branch ref>
 
 While Workers Builds is still creating the Preview, `up` logs `waiting for the Preview feat/notes to be deployed (n)`. `check` retries for up to 15 minutes while it waits for the right database.
 
-The `secret list` call is how a shared-database PR checks for a leftover override: if the PR once had its own database (the label was removed, or the `supabase/` change reverted), `swp pr` deletes `SUPABASE_OVERRIDE` from the Preview and then the Supabase branch `up` made for it.
+The `secret list` call is how a shared-database PR checks for a leftover override: if the PR once had its own database (the label was removed, or the `supabase/` change reverted), `supabase-worker-previews pr` deletes `SUPABASE_OVERRIDE` from the Preview and then the Supabase branch `up` made for it.
 
-On the PR, `swp pr` keeps one comment, updated in place, with the status (Checking, **Passed** or **Failed** with the reason and a link to the run), a "Visit Preview" link, the database it serves and the commit. It also records a GitHub deployment in the shared `Preview` environment, which gives the PR a "View deployment" button pointing at the Preview URL.
+On the PR, `supabase-worker-previews pr` keeps one comment, updated in place, with the status (Checking, **Passed** or **Failed** with the reason and a link to the run), a "Visit Preview" link, the database it serves and the commit. It also records a GitHub deployment in the shared `Preview` environment, which gives the PR a "View deployment" button pointing at the Preview URL.
 
-Closing the PR runs `swp down`: it deletes the PR's Supabase branch if the integration has not already, then deletes the Preview. The comment changes to say what was removed, and the PR's deployments are marked inactive.
+Closing the PR runs `supabase-worker-previews down`: it deletes the PR's Supabase branch if the integration has not already, then deletes the Preview. The comment changes to say what was removed, and the PR's deployments are marked inactive.
 
-PRs from forks are skipped with a `::notice::` and exit 0: GitHub gives them no secrets, so `swp` neither points nor checks anything for them.
+PRs from forks are skipped with a `::notice::` and exit 0: GitHub gives them no secrets, so `supabase-worker-previews` neither points nor checks anything for them.
 
 Open the Preview URL and **sign in with a real browser**. A green check proves which database the page reads; signing in proves the grants and redirect URLs. If either fails, see [troubleshooting](troubleshooting.md).
 

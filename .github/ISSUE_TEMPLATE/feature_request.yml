@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something swp should do
+description: Suggest something supabase-worker-previews should do
 labels: [enhancement]
 body:
   - type: textarea
@@ -13,7 +13,7 @@ body:
     id: proposal
     attributes:
       label: Proposal
-      description: What you would like swp or the runtime to do.
+      description: What you would like supabase-worker-previews or the runtime to do.
     validations:
       required: true
   - type: textarea

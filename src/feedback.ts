@@ -81,7 +81,7 @@ export type FeedbackDeps = Deps & {
 };
 
 /**
- * The PR comment and GitHub deployment for one `swp pr` run. Any GitHub API
+ * The PR comment and GitHub deployment for one `supabase-worker-previews pr` run. Any GitHub API
  * failure becomes a warning; only the wrapped database work decides the job.
  */
 export class Feedback {

@@ -50,14 +50,20 @@ describe("resolveInvocation", () => {
       ["up", "-h"],
     ]) {
       const r = resolveInvocation(argv);
-      expect(r.kind === "help" && r.text).toMatch(/^swp up: give a branch's Preview its own database/);
+      expect(r.kind === "help" && r.text).toMatch(
+        /^supabase-worker-previews up: give a branch's Preview its own database/,
+      );
     }
   });
 
   it("suggests the command meant by a typo", () => {
-    expect(error("doctr")).toMatch(/^Unknown command "doctr". Did you mean "swp doctor"\?/);
-    expect(error("help", "shard")).toMatch(/Did you mean "swp shared"\?/);
-    expect(error("frobnicate")).toMatch(/^Unknown command "frobnicate".\nRun swp --help/);
+    expect(error("doctr")).toMatch(
+      /^Unknown command "doctr". Did you mean "supabase-worker-previews doctor"\?/,
+    );
+    expect(error("help", "shard")).toMatch(/Did you mean "supabase-worker-previews shared"\?/);
+    expect(error("frobnicate")).toMatch(
+      /^Unknown command "frobnicate".\nRun supabase-worker-previews --help/,
+    );
   });
 
   it("refuses unknown flags, suggesting the one meant", () => {
@@ -109,7 +115,7 @@ describe("help", () => {
     expect(text).toMatch(/^Set up$/m);
     expect(text).toMatch(/^Per branch$/m);
     expect(text).toContain("https://github.com/mattruby/supabase-worker-previews#readme");
-    expect(text).toContain(`swp ${version()}`);
+    expect(text).toContain(`supabase-worker-previews ${version()}`);
     expect(text).toContain("docs/tokens.md");
     expect(text).not.toContain("\u2014");
   });
@@ -117,8 +123,8 @@ describe("help", () => {
   it("gives every command its own usage, flags and an example", () => {
     for (const c of COMMANDS) {
       const text = commandHelp(c);
-      expect(text).toContain(`Usage: swp ${c.name}`);
-      expect(text).toMatch(/^Examples\n {2}swp /m);
+      expect(text).toContain(`Usage: supabase-worker-previews ${c.name}`);
+      expect(text).toMatch(/^Examples\n {2}supabase-worker-previews /m);
     }
     expect(commandHelp(COMMANDS.find((c) => c.name === "shared")!)).toContain(
       "Needs: SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID",
@@ -227,21 +233,25 @@ describe("doctor report", () => {
     const sections = await doctor({}, undefined, project({ "wrangler.json": wrangler }));
     const { text, pass } = formatReport(sections);
     expect(pass).toBe(false);
-    expect(text).toMatch(/^Local files\n {2}✗ No swp.config.json in this directory. Run `swp init` first/);
+    expect(text).toMatch(
+      /^Local files\n {2}✗ No supabase-worker-previews.json in this directory. Run `supabase-worker-previews init` first/,
+    );
     expect(text).toMatch(/✗ wrangler.json has no "previews" block[^\n]*\n {4}→ Add "previews"/);
     expect(text).toMatch(/Supabase \(online\)\n {2}- skipped until the config above is fixed/);
     expect(text).toMatch(
-      /\n\n\d+ errors, \d+ warnings? \(online checks skipped\). Fix the errors and run swp doctor again.$/,
+      /\n\n\d+ errors, \d+ warnings? \(online checks skipped\). Fix the errors and run supabase-worker-previews doctor again.$/,
     );
   });
 
   it("says how to turn on the online checks", async () => {
     const dir = project({
       "wrangler.json": wrangler,
-      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT }),
+      "supabase-worker-previews.json": JSON.stringify({ supabaseProjectRef: PARENT }),
     });
     const { text } = formatReport(await doctor({}, undefined, dir));
-    expect(text).toMatch(/- skipped: SUPABASE_ACCESS_TOKEN is not set. Add it to .env.swp/);
+    expect(text).toMatch(
+      /- skipped: SUPABASE_ACCESS_TOKEN is not set. Add it to .env.supabase-worker-previews/,
+    );
   });
 
   it("sums up a clean run, with warnings, and pluralizes", () => {

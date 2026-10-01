@@ -9,13 +9,14 @@ Find your symptom below, then follow its cause and fix. Each heading is phrased 
 - [A deleted Preview still loads](#a-deleted-preview-still-loads)
 - [Sign-in links and OAuth redirect to localhost](#sign-in-links-and-oauth-redirect-to-localhost)
 - [A binding or secret is undefined only in Previews](#a-binding-or-secret-is-undefined-only-in-previews)
-- [`swp shared` or `swp up` hangs, then says the branch is not ready](#swp-shared-or-swp-up-hangs-then-says-the-branch-is-not-ready)
+- [`supabase-worker-previews shared` or `supabase-worker-previews up` hangs, then says the branch is not ready](#supabase-worker-previews-shared-or-supabase-worker-previews-up-hangs-then-says-the-branch-is-not-ready)
 - [Cannot create Supabase branch](#cannot-create-supabase-branch)
 - [The PR check is green but nothing happened](#the-pr-check-is-green-but-nothing-happened)
 - [No PR comment or View deployment button](#no-pr-comment-or-view-deployment-button)
 - [The access token cannot reveal secret API keys](#the-access-token-cannot-reveal-secret-api-keys)
-- [`node: .env.swp: not found` or exit code 9](#node-envswp-not-found-or-exit-code-9)
+- [`node: .env.supabase-worker-previews: not found` or exit code 9](#node-envsupabase-worker-previews-not-found-or-exit-code-9)
 - [A token is invalid or expired](#a-token-is-invalid-or-expired)
+- [Upgrading from 0.1: `swp` is not found](#upgrading-from-01-swp-is-not-found)
 
 ## Start here
 
@@ -50,14 +51,14 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
    The Management API has no field for whether a project is connected to GitHub. `doctor` instead reads the action runs (`GET /v1/projects/{branch ref}/actions`) of up to five branches, the shared branch first, and looks for a run that carries `git_config` with the repo, which only integration-made runs have. It cannot know about branches past those five, or whether a particular older branch was created before the repo was connected, and a branch that has had no integration run yet (for example, connected but never pushed since) gives no proof either way. If you have connected the repo and still get the warning, push to the trunk and run `doctor` again.
 
 3. Rebuild the broken branch so it runs the migrations from scratch:
-   - **A PR's branch:** close and reopen the PR. The integration deletes the branch on close and creates it again on reopen. Closing also runs `swp down`, which deletes the Preview, so push a commit afterwards to have Workers Builds recreate it.
+   - **A PR's branch:** close and reopen the PR. The integration deletes the branch on close and creates it again on reopen. Closing also runs `supabase-worker-previews down`, which deletes the Preview, so push a commit afterwards to have Workers Builds recreate it.
    - **The shared `preview` branch:** persistent branches refuse `DELETE`, so first `PATCH /v1/branches/{ref}` with `{"persistent": false}`, then delete it, then run `npx supabase-worker-previews shared` again and paste the new `previews.vars`.
 
 ## My Preview shows production data
 
 **Symptom.** A Preview reads or writes production rows.
 
-`swp check` would fail at once with `Preview <slug> serves the production database <ref>; refusing to pass` if the page named production. If the check is green but the browser still talks to production, the browser is not using the injected config.
+`supabase-worker-previews check` would fail at once with `Preview <slug> serves the production database <ref>; refusing to pass` if the page named production. If the check is green but the browser still talks to production, the browser is not using the injected config.
 
 **Causes and fixes.**
 
@@ -76,10 +77,10 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
 
 **Causes and fixes.**
 
-- **The base config changed after the Preview was created.** A Preview copies the base config once, at creation, and redeploying does not refresh it ([Cloudflare: configuration](https://developers.cloudflare.com/workers/previews/configuration/)). This matters after `swp shared` rewrites the shared branch's secret key. Delete only the Preview with `npx wrangler preview delete --name <branch> --worker-name <worker>` and push the branch again. (`swp down` also deletes the branch's own Supabase database, if it has one.)
+- **The base config changed after the Preview was created.** A Preview copies the base config once, at creation, and redeploying does not refresh it ([Cloudflare: configuration](https://developers.cloudflare.com/workers/previews/configuration/)). This matters after `supabase-worker-previews shared` rewrites the shared branch's secret key. Delete only the Preview with `npx wrangler preview delete --name <branch> --worker-name <worker>` and push the branch again. (`supabase-worker-previews down` also deletes the branch's own Supabase database, if it has one.)
 - **`previews.vars` changed but the branch has not rebuilt.** `previews.vars` is read on each Preview deploy. Merge or rebase the trunk into the branch and push.
 - **A PR's `SUPABASE_OVERRIDE` points at a branch that was recreated.** Re-run the workflow, or run `npx supabase-worker-previews up --branch <b>`, which writes a fresh override.
-- **The PR no longer needs its own database, but its override remains.** `swp pr` removes `SUPABASE_OVERRIDE` (and the branch `up` made) on its next run on the shared path. If the label was removed, that run is triggered by `unlabeled`; a workflow written before that trigger was added needs it in `on.pull_request.types`. Look for `removed SUPABASE_OVERRIDE from Preview <name>; it serves preview again` in the log. By hand: `npx wrangler preview secret delete SUPABASE_OVERRIDE --name <preview> --worker-name <worker>`.
+- **The PR no longer needs its own database, but its override remains.** `supabase-worker-previews pr` removes `SUPABASE_OVERRIDE` (and the branch `up` made) on its next run on the shared path. If the label was removed, that run is triggered by `unlabeled`; a workflow written before that trigger was added needs it in `on.pull_request.types`. Look for `removed SUPABASE_OVERRIDE from Preview <name>; it serves preview again` in the log. By hand: `npx wrangler preview secret delete SUPABASE_OVERRIDE --name <preview> --worker-name <worker>`.
 - **Just recreated.** After a delete and recreate, the hostname served the old version for a few seconds. Wait and re-run `check`.
 
 ## The Preview database check never passes
@@ -104,13 +105,13 @@ Other errors from `check` and `up`:
 - `No Supabase branch for <want> on <ref>`: for the shared case, run `npx supabase-worker-previews shared`. For a PR that needs its own database, the integration has not created the branch; check that automatic branching is on and the Supabase directory setting matches `supabaseDir`.
 - `No deployed Preview <name> appeared; is a Preview being deployed for it?`: `up` waited 10 minutes for the Preview to be deployed. Same fixes as `no Preview yet`.
 
-Workers Builds names a Preview after the raw git branch (`feat/x`), and Cloudflare derives the slug (`feat-x`). `swp` matches on the raw name first, then the slug. The dashboard accepted only a literal `npx wrangler preview` as the Preview command when measured; a custom `--name` breaks the match.
+Workers Builds names a Preview after the raw git branch (`feat/x`), and Cloudflare derives the slug (`feat-x`). `supabase-worker-previews` matches on the raw name first, then the slug. The dashboard accepted only a literal `npx wrangler preview` as the Preview command when measured; a custom `--name` breaks the match.
 
-If your own CI deploys Previews as `pr-<number>` (Cloudflare's automation examples do), set `"previewName": "pr"` in `swp.config.json`. `swp` then looks for `pr-<n>` instead; `swp pr` takes the number from the event, and `up`, `check` and `down` need `--pr <n>` or fail with `previewName is "pr", so pass the PR number (--pr <n>)`.
+If your own CI deploys Previews as `pr-<number>` (Cloudflare's automation examples do), set `"previewName": "pr"` in `supabase-worker-previews.json`. `supabase-worker-previews` then looks for `pr-<n>` instead; `supabase-worker-previews pr` takes the number from the event, and `up`, `check` and `down` need `--pr <n>` or fail with `previewName is "pr", so pass the PR number (--pr <n>)`.
 
 ## A deleted Preview still loads
 
-**Symptom.** After `swp down` or `wrangler preview delete`, the Preview URL still serves, while the Previews API no longer lists it.
+**Symptom.** After `supabase-worker-previews down` or `wrangler preview delete`, the Preview URL still serves, while the Previews API no longer lists it.
 
 **Cause.** The Preview was first created **from a laptop** (`wrangler preview` run locally). Such Previews kept serving for 15 minutes or more after deletion, by wrangler or the API. Previews created by Workers Builds returned 404 within 15 seconds of deletion.
 
@@ -120,7 +121,7 @@ If your own CI deploys Previews as `pr-<number>` (Cloudflare's automation exampl
 
 **Symptom.** A magic link, OAuth sign-in or password reset from a Preview lands on `http://localhost:3000` (or whatever `site_url` your `config.toml` has).
 
-**Cause.** Supabase ignores a `redirectTo` that is not on the project's redirect allow list and uses the Site URL instead ([Supabase troubleshooting](https://supabase.com/docs/guides/troubleshooting/why-am-i-being-redirected-to-the-wrong-url-when-using-auth-redirectto-option-_vqIeO)). The GitHub integration re-applies `config.toml` to branches on **every push**, so the Site URL and redirect list that `swp shared` and `swp up` set through the API are replaced by `config.toml`'s values on the next push.
+**Cause.** Supabase ignores a `redirectTo` that is not on the project's redirect allow list and uses the Site URL instead ([Supabase troubleshooting](https://supabase.com/docs/guides/troubleshooting/why-am-i-being-redirected-to-the-wrong-url-when-using-auth-redirectto-option-_vqIeO)). The GitHub integration re-applies `config.toml` to branches on **every push**, so the Site URL and redirect list that `supabase-worker-previews shared` and `supabase-worker-previews up` set through the API are replaced by `config.toml`'s values on the next push.
 
 **Fix.**
 
@@ -151,9 +152,9 @@ If your own CI deploys Previews as `pr-<number>` (Cloudflare's automation exampl
 - **An app secret was added to the base config after the Preview was created.** The Preview kept its original copy. Delete the Preview and push again.
 - **Platform limits on Previews.** Cloudflare documents that a service binding reaches only the production version of the other Worker, Previews cannot consume Queues, and Cron Triggers target production only ([Cloudflare: resources](https://developers.cloudflare.com/workers/previews/resources/)).
 
-## `swp shared` or `swp up` hangs, then says the branch is not ready
+## `supabase-worker-previews shared` or `supabase-worker-previews up` hangs, then says the branch is not ready
 
-**Symptom.** `swp shared` or `swp up` logs nothing for minutes, then fails with:
+**Symptom.** `supabase-worker-previews shared` or `supabase-worker-previews up` logs nothing for minutes, then fails with:
 
 ```text
 Supabase branch <ref> not ready after 15 minutes: <have> of <want> migrations, <status>
@@ -161,18 +162,18 @@ Supabase branch <ref> not ready after 15 minutes: <have> of <want> migrations, <
 
 or ends at once with `Supabase branch <ref> ended MIGRATIONS_FAILED` (or `FUNCTIONS_FAILED`).
 
-**What `swp` waits for.** A new branch 404s on `GET /v1/branches/{ref}` for several seconds, and its status reaches `FUNCTIONS_DEPLOYED` before the migrations finish. So `swp` waits until `supabase_migrations.schema_migrations` holds at least as many rows as there are `.sql` files in `supabase/migrations/` in your checkout.
+**What `supabase-worker-previews` waits for.** A new branch 404s on `GET /v1/branches/{ref}` for several seconds, and its status reaches `FUNCTIONS_DEPLOYED` before the migrations finish. So `supabase-worker-previews` waits until `supabase_migrations.schema_migrations` holds at least as many rows as there are `.sql` files in `supabase/migrations/` in your checkout.
 
 **Causes and fixes.**
 
 - **A migration failed.** Open the branch in the Supabase dashboard, or the Supabase check on the PR, and read the migration log. Fix the migration and push.
-- **The checkout has migrations the branch will never run.** The count compares your local files with the branch. For the shared branch, it tracks the trunk: run `swp shared` from an up-to-date trunk checkout, not from a feature branch with new migrations.
+- **The checkout has migrations the branch will never run.** The count compares your local files with the branch. For the shared branch, it tracks the trunk: run `supabase-worker-previews shared` from an up-to-date trunk checkout, not from a feature branch with new migrations.
 - **A file in `supabase/migrations/` ends in `.sql` but is not a migration** (a scratch file). Remove it from the folder.
 - **Supabase is slow.** Creation can take several minutes. Re-run the workflow; `up` reuses the existing branch.
 
 ## Cannot create Supabase branch
 
-`swp up` (and `swp shared`) explain a failed `POST /v1/projects/{ref}/branches` as `Cannot create Supabase branch "<name>": <advice> Supabase said: <status> <body>`:
+`supabase-worker-previews up` (and `supabase-worker-previews shared`) explain a failed `POST /v1/projects/{ref}/branches` as `Cannot create Supabase branch "<name>": <advice> Supabase said: <status> <body>`:
 
 | Advice                                                                                | Fix                                                                                                             |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -183,16 +184,16 @@ or ends at once with `Supabase branch <ref> ended MIGRATIONS_FAILED` (or `FUNCTI
 | `A Supabase branch named "<name>" already exists on <ref>.`                           | A branch with that name exists but is not tied to this git branch, so `up` did not find it; rename or delete it |
 | `The Supabase API is rate limiting this token; run again in a minute.`                | Re-run the workflow                                                                                             |
 
-`swp shared` also refuses a project without branching: `Branching is not enabled on <ref>. Connect the repo in the Supabase dashboard (project settings, Integrations, GitHub, automatic branching on), then run swp shared again.`
+`supabase-worker-previews shared` also refuses a project without branching: `Branching is not enabled on <ref>. Connect the repo in the Supabase dashboard (project settings, Integrations, GitHub, automatic branching on), then run supabase-worker-previews shared again.`
 
 ## The PR check is green but nothing happened
 
-`swp pr` exits 0 without doing anything, and says why in an annotation, in two cases:
+`supabase-worker-previews pr` exits 0 without doing anything, and says why in an annotation, in two cases:
 
-- `::notice::swp pr skipped PR #<n>: it comes from the fork <owner/repo>, and GitHub Actions gives fork PRs no secrets`. Expected; there is nothing to fix.
-- `::warning::swp pr skipped PR #<n>: <NAMES> are empty; ...` on a bot's PR (Dependabot gets no Actions secrets). Expected for bots.
+- `::notice::supabase-worker-previews pr skipped PR #<n>: it comes from the fork <owner/repo>, and GitHub Actions gives fork PRs no secrets`. Expected; there is nothing to fix.
+- `::warning::supabase-worker-previews pr skipped PR #<n>: <NAMES> are empty; ...` on a bot's PR (Dependabot gets no Actions secrets). Expected for bots.
 
-On anyone else's PR, empty secrets fail the job with `::error::swp pr cannot check PR #<n>: <NAMES> are empty; add them to the repository's Actions secrets`. Add the named secrets.
+On anyone else's PR, empty secrets fail the job with `::error::supabase-worker-previews pr cannot check PR #<n>: <NAMES> are empty; add them to the repository's Actions secrets`. Add the named secrets.
 
 ## No PR comment or View deployment button
 
@@ -202,23 +203,35 @@ The comment and deployment never fail the job. Look for `::warning::PR comment s
 
 `Project <ref>: the access token cannot reveal secret API keys; use a token with the project's secrets permission`: the API returned the secret key masked with `·`, so the token lacks the permission to reveal it. Give it **API Key Secrets: Read** ([tokens](tokens.md#supabase-access-token)).
 
-## `node: .env.swp: not found` or exit code 9
+## `node: .env.supabase-worker-previews: not found` or exit code 9
 
-**Symptom.** `swp ... --env-file <file>` prints `node: <file>: not found` and exits 9 before `swp` prints anything. When the file exists, `swp` instead stops with `Unknown flag --env-file. Did you mean --dotenv?`
+**Symptom.** `supabase-worker-previews ... --env-file <file>` prints `node: <file>: not found` and exits 9 before `supabase-worker-previews` prints anything. When the file exists, `supabase-worker-previews` instead stops with `Unknown flag --env-file. Did you mean --dotenv?`
 
-**Cause.** Node 24 reads `--env-file` anywhere on the command line as its own flag, so a missing file stops Node before `swp` runs. `swp` uses `--dotenv` for this reason.
+**Cause.** Node 24 reads `--env-file` anywhere on the command line as its own flag, so a missing file stops Node before `supabase-worker-previews` runs. `supabase-worker-previews` uses `--dotenv` for this reason.
 
-**Fix.** Use `--dotenv <file>`, or name the file `.env.swp`, which `swp` loads by default.
+**Fix.** Use `--dotenv <file>`, or name the file `.env.supabase-worker-previews`, which `supabase-worker-previews` loads by default.
 
 ## A token is invalid or expired
 
 **Symptom.** A command fails with one line such as `Supabase API GET /projects/<ref>/branches: 401 JWT could not be decoded. SUPABASE_ACCESS_TOKEN is invalid or expired; see ...`. GitHub calls read `GitHub API GET <path>: 401 ...`.
 
-**Fix.** Create a new token with the scopes in [tokens](tokens.md) and update `.env.swp` or the Actions secret it names. If a variable is missing rather than wrong, `swp` lists each missing one with where to get it.
+**Fix.** Create a new token with the scopes in [tokens](tokens.md) and update `.env.supabase-worker-previews` or the Actions secret it names. If a variable is missing rather than wrong, `supabase-worker-previews` lists each missing one with where to get it.
+
+## Upgrading from 0.1: `swp` is not found
+
+Before 0.2.0 the CLI was also installed as `swp`. That name is gone, because `npx swp` on a machine without this package runs an unrelated npm package named `swp` that deletes dependency and build folders. Use `npx supabase-worker-previews <command>` in scripts and workflows.
+
+Two files were renamed too. Both old names still work, with a warning, until you rename them:
+
+| Before 0.2.0      | Now                                |
+| ----------------- | ---------------------------------- |
+| `swp.config.json` | `supabase-worker-previews.json`    |
+| `.env.swp`        | `.env.supabase-worker-previews`    |
+| `SWP_DEBUG=1`     | `SUPABASE_WORKER_PREVIEWS_DEBUG=1` |
 
 ## Still stuck
 
-Run the failing command again with `SWP_DEBUG=1` to print the stack trace, then open an [issue](https://github.com/mattruby/supabase-worker-previews/issues/new/choose) with it, the output of `npx supabase-worker-previews doctor` and the failing log. If you found a platform behaviour that disagrees with [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md), say what you ran and what you saw.
+Run the failing command again with `SUPABASE_WORKER_PREVIEWS_DEBUG=1` to print the stack trace, then open an [issue](https://github.com/mattruby/supabase-worker-previews/issues/new/choose) with it, the output of `npx supabase-worker-previews doctor` and the failing log. If you found a platform behaviour that disagrees with [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md), say what you ran and what you saw.
 
 ---
 

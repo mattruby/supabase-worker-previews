@@ -100,7 +100,7 @@ describe("createBranch", () => {
     };
     const err = await create(402, body).catch((e: Error) => e);
     expect((err as Error).message).toMatch(/reached its branch limit/);
-    expect((err as Error).message).toMatch(/swp prune/);
+    expect((err as Error).message).toMatch(/supabase-worker-previews prune/);
     expect((err as Error).message).toContain("https://supabase.com/dashboard/org/acme/billing");
     expect((err as Error).message).toContain("Branch limit reached");
   });

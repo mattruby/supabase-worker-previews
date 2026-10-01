@@ -1,12 +1,23 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { parseJsonc } from "./jsonc.js";
 import { didYouMean } from "./suggest.js";
 
-export const CONFIG_FILE = "swp.config.json";
+export const CONFIG_FILE = "supabase-worker-previews.json";
+/** The name before 0.2.0, still read when the current one is absent. */
+export const LEGACY_CONFIG_FILE = "swp.config.json";
+export const DOTENV_FILE = ".env.supabase-worker-previews";
+export const LEGACY_DOTENV_FILE = ".env.swp";
+
+/** The config file to read in `cwd`: the current name, else the legacy one if only that exists. */
+export function configFileIn(cwd = process.cwd()): string {
+  return !existsSync(join(cwd, CONFIG_FILE)) && existsSync(join(cwd, LEGACY_CONFIG_FILE))
+    ? LEGACY_CONFIG_FILE
+    : CONFIG_FILE;
+}
 export const WRANGLER_FILES = ["wrangler.jsonc", "wrangler.json", "wrangler.toml"];
-/** What `swp init` writes when it cannot find the project ref. */
+/** What `supabase-worker-previews init` writes when it cannot find the project ref. */
 export const PLACEHOLDER_REF = "<production project ref>";
 
 export type Config = {
@@ -29,9 +40,9 @@ export type Config = {
   previewName: "branch" | "pr";
   /** Which Supabase API keys to hand a Preview when a project has both kinds. */
   apiKeys: "legacy" | "new";
-  /** `swp pr` keeps one status comment on the PR. Default true. */
+  /** `supabase-worker-previews pr` keeps one status comment on the PR. Default true. */
   prComment?: boolean;
-  /** `swp pr` records a GitHub deployment for the PR head. Default true. */
+  /** `supabase-worker-previews pr` records a GitHub deployment for the PR head. Default true. */
   githubDeployments?: boolean;
   /** GitHub environment of those deployments, shared by every PR; `{branch}` makes one per branch. Default "Preview". */
   deploymentEnvironment?: string;
@@ -82,7 +93,8 @@ export function readWranglerConfig(cwd = process.cwd()): WranglerConfig | null {
 }
 
 export function loadConfig(overrides: Partial<Config> = {}, cwd = process.cwd()): Config {
-  const path = join(cwd, CONFIG_FILE);
+  const name = configFileIn(cwd);
+  const path = join(cwd, name);
   const exists = existsSync(path);
   const file = exists ? readConfigFile(path) : {};
   const wrangler = readWranglerConfig(cwd);
@@ -90,42 +102,43 @@ export function loadConfig(overrides: Partial<Config> = {}, cwd = process.cwd())
   if (!merged.supabaseProjectRef)
     throw new Error(
       exists
-        ? `Set "supabaseProjectRef" (the production project) in ${CONFIG_FILE}`
-        : `No ${CONFIG_FILE} in this directory. Run \`swp init\` first, or pass --project-ref <ref>.`,
+        ? `Set "supabaseProjectRef" (the production project) in ${name}`
+        : `No ${name} in this directory. Run \`supabase-worker-previews init\` first, or pass --project-ref <ref>.`,
     );
   if (merged.supabaseProjectRef === PLACEHOLDER_REF)
     throw new Error(
-      `"supabaseProjectRef" in ${CONFIG_FILE} is still ${PLACEHOLDER_REF}. ` +
+      `"supabaseProjectRef" in ${name} is still ${PLACEHOLDER_REF}. ` +
         "Set it to the production project's ref, the <ref> in https://<ref>.supabase.co.",
     );
   if (!merged.worker)
     throw new Error(
       wrangler
-        ? `${wrangler.file} has no "name"; add the Worker's name there or "worker" in ${CONFIG_FILE}`
-        : `No ${WRANGLER_FILES.join(", ")} in this directory. Run swp in the Worker's directory, or set "worker" in ${CONFIG_FILE}.`,
+        ? `${wrangler.file} has no "name"; add the Worker's name there or "worker" in ${name}`
+        : `No ${WRANGLER_FILES.join(", ")} in this directory. Run supabase-worker-previews in the Worker's directory, or set "worker" in ${name}.`,
     );
   for (const [key, allowed] of Object.entries(CHOICES)) {
     const value = merged[key as keyof typeof CHOICES];
     if (!(allowed as readonly string[]).includes(value))
-      throw new Error(`"${key}" in ${CONFIG_FILE} must be ${allowed.map((a) => `"${a}"`).join(" or ")}`);
+      throw new Error(`"${key}" in ${name} must be ${allowed.map((a) => `"${a}"`).join(" or ")}`);
   }
   return merged as Config;
 }
 
 function readConfigFile(path: string): Partial<Config> {
+  const name = basename(path);
   let json: unknown;
   try {
     json = JSON.parse(readFileSync(path, "utf8"));
   } catch (err) {
-    throw new Error(`Cannot parse ${CONFIG_FILE}: ${(err as Error).message}`, { cause: err });
+    throw new Error(`Cannot parse ${name}: ${(err as Error).message}`, { cause: err });
   }
   if (!json || typeof json !== "object" || Array.isArray(json))
-    throw new Error(`${CONFIG_FILE} must hold a JSON object`);
+    throw new Error(`${name} must hold a JSON object`);
   for (const key of Object.keys(json)) {
     if (KEYS.includes(key)) continue;
     const guess = didYouMean(key, KEYS);
     throw new Error(
-      `Unknown key "${key}" in ${CONFIG_FILE}.${guess ? ` Did you mean "${guess}"?` : ""} See the README for the keys.`,
+      `Unknown key "${key}" in ${name}.${guess ? ` Did you mean "${guess}"?` : ""} See the README for the keys.`,
     );
   }
   return json;

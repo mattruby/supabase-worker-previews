@@ -2,7 +2,12 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   CONFIG_DEFAULTS,
+  CONFIG_FILE,
+  configFileIn,
   defined,
+  DOTENV_FILE,
+  LEGACY_CONFIG_FILE,
+  LEGACY_DOTENV_FILE,
   loadConfig,
   migrationFiles,
   migrationsDir,
@@ -54,7 +59,7 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
   const ok = (message: string) => out.push({ level: "ok", message });
   const warn = (message: string, fix: string) => out.push({ level: "warn", message, fix });
   const error = (message: string, fix: string) => out.push({ level: "error", message, fix });
-  const shared = "Run `swp shared` and paste the values it prints into previews.vars.";
+  const shared = "Run `supabase-worker-previews shared` and paste the values it prints into previews.vars.";
 
   const version = installedWranglerVersion(cwd);
   if (!version)
@@ -73,14 +78,14 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
   if (!wrangler)
     error(
       "no wrangler.jsonc, wrangler.json or wrangler.toml here",
-      "Run swp doctor in the Worker's directory.",
+      "Run supabase-worker-previews doctor in the Worker's directory.",
     );
   else {
     const previews = wrangler.json.previews as Record<string, unknown> | undefined;
     if (!previews)
       error(
         `${wrangler.file} has no "previews" block, so Previews get no Supabase settings`,
-        'Add "previews": { "vars": {} }, redeclaring every binding the Worker uses, then run `swp shared` for the vars.',
+        'Add "previews": { "vars": {} }, redeclaring every binding the Worker uses, then run `supabase-worker-previews shared` for the vars.',
       );
     else {
       const vars = (previews.vars ?? {}) as Record<string, unknown>;
@@ -94,7 +99,7 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
         if (name in vars)
           error(
             `previews.vars holds ${name}; secrets belong in the Preview base config`,
-            `Remove ${name} from previews.vars (swp stores it as a secret), and rotate the key if it was committed.`,
+            `Remove ${name} from previews.vars (supabase-worker-previews stores it as a secret), and rotate the key if it was committed.`,
           );
       for (const key of BINDING_KEYS) {
         if (!(key in wrangler.json) || key in previews) continue;
@@ -124,7 +129,7 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
   if (!migrations.length)
     warn(
       `no migrations in ${migrationsDir(config)}`,
-      'Commit your migrations there, or set "supabaseDir" in swp.config.json.',
+      'Commit your migrations there, or set "supabaseDir" in supabase-worker-previews.json.',
     );
   else {
     const first = readFileSync(join(cwd, migrationsDir(config), migrations[0]!), "utf8");
@@ -132,7 +137,7 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
     else
       error(
         `the first migration (${migrations[0]}) does not grant default privileges; branch databases will 403`,
-        "Run `swp init` to add the grants migration before it.",
+        "Run `supabase-worker-previews init` to add the grants migration before it.",
       );
   }
 
@@ -164,7 +169,7 @@ export async function checkRemote(
         level: "error",
         message: `cannot read project ${parent}: ${(err as Error).message}`,
         ...(status === 404 && {
-          fix: `Check "supabaseProjectRef" in swp.config.json, and that SUPABASE_ACCESS_TOKEN can reach that project.`,
+          fix: `Check "supabaseProjectRef" in supabase-worker-previews.json, and that SUPABASE_ACCESS_TOKEN can reach that project.`,
         }),
       },
     ];
@@ -198,7 +203,7 @@ export async function checkRemote(
     out.push({
       level: "error",
       message: `no "${config.sharedBranch}" branch, the shared Preview database`,
-      fix: "Run `swp shared` to create it.",
+      fix: "Run `supabase-worker-previews shared` to create it.",
     });
     return out;
   }
@@ -206,19 +211,19 @@ export async function checkRemote(
     out.push({
       level: "error",
       message: `"${config.sharedBranch}" is the production project itself`,
-      fix: 'Set "sharedBranch" in swp.config.json to another name, then run `swp shared`.',
+      fix: 'Set "sharedBranch" in supabase-worker-previews.json to another name, then run `supabase-worker-previews shared`.',
     });
   if (!shared.persistent)
     out.push({
       level: "warn",
       message: `"${config.sharedBranch}" is not persistent`,
-      fix: "Run `swp shared` to make it persistent.",
+      fix: "Run `supabase-worker-previews shared` to make it persistent.",
     });
   if (shared.git_branch !== config.trunk)
     out.push({
       level: "error",
       message: `"${config.sharedBranch}" tracks ${shared.git_branch ?? "no git branch"}, not ${config.trunk}`,
-      fix: `Run \`swp shared\` to point it at ${config.trunk}.`,
+      fix: `Run \`supabase-worker-previews shared\` to point it at ${config.trunk}.`,
     });
   const vars = (readWranglerConfig(cwd)?.json.previews as { vars?: Record<string, string> } | undefined)
     ?.vars;
@@ -227,7 +232,7 @@ export async function checkRemote(
     out.push({
       level: "error",
       message: `previews.vars uses ${varsRef}, but "${config.sharedBranch}" is ${shared.project_ref}`,
-      fix: "Run `swp shared` and paste the values it prints into previews.vars.",
+      fix: "Run `supabase-worker-previews shared` and paste the values it prints into previews.vars.",
     });
   else if (varsRef)
     out.push({
@@ -299,6 +304,18 @@ export async function doctor(
   const local: Section = { title: "Local files", findings: [] };
   const online: Section = { title: "Supabase (online)", findings: [] };
   let config: Config | undefined;
+  if (configFileIn(cwd) === LEGACY_CONFIG_FILE)
+    local.findings.push({
+      level: "warn",
+      message: `${LEGACY_CONFIG_FILE} is the name from before 0.2.0`,
+      fix: `Rename it to ${CONFIG_FILE}; the old name is still read for now.`,
+    });
+  if (existsSync(join(cwd, LEGACY_DOTENV_FILE)) && !existsSync(join(cwd, DOTENV_FILE)))
+    local.findings.push({
+      level: "warn",
+      message: `${LEGACY_DOTENV_FILE} is the name from before 0.2.0`,
+      fix: `Rename it to ${DOTENV_FILE}, and update .gitignore; the old name is still loaded for now.`,
+    });
   try {
     config = loadConfig(overrides, cwd);
   } catch (err) {
@@ -317,7 +334,7 @@ export async function doctor(
   if (!config) online.skipped = "skipped until the config above is fixed";
   else if (!supabase)
     online.skipped =
-      "skipped: SUPABASE_ACCESS_TOKEN is not set. Add it to .env.swp to also check branching, " +
+      "skipped: SUPABASE_ACCESS_TOKEN is not set. Add it to .env.supabase-worker-previews to also check branching, " +
       `the shared database and the GitHub integration (${TOKENS_URL}).`;
   else {
     online.title = `Supabase (online, project ${config.supabaseProjectRef})`;
@@ -356,7 +373,7 @@ export function formatReport(
     "",
     errors
       ? s.red(
-          `${plural(errors, "error")}, ${plural(warnings, "warning")}${skipped}. Fix the errors and run swp doctor again.`,
+          `${plural(errors, "error")}, ${plural(warnings, "warning")}${skipped}. Fix the errors and run supabase-worker-previews doctor again.`,
         )
       : warnings
         ? s.yellow(`No errors, ${plural(warnings, "warning")}${skipped}.`)

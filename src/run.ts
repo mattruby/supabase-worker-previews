@@ -39,7 +39,7 @@ export function makeRunner(dryRun: boolean, log: (line: string) => void = consol
 
 /**
  * `--flag value`, `--flag=value` and bare `--flag`. A flag in `booleans` never
- * takes the next argument, so `swp --dry-run up` keeps `up` as the command.
+ * takes the next argument, so `supabase-worker-previews --dry-run up` keeps `up` as the command.
  */
 export function parseArgs(
   argv: string[],

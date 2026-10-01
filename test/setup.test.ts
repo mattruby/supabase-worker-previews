@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadConfig, type Config } from "../src/config.js";
-import { checkLocal, checkRemote, compareVersions, hasDefaultPrivileges } from "../src/commands/doctor.js";
+import {
+  checkLocal,
+  checkRemote,
+  compareVersions,
+  doctor,
+  hasDefaultPrivileges,
+} from "../src/commands/doctor.js";
 import type { ActionRun, Branch, SupabaseApi } from "../src/supabase.js";
 import { init, timestampBefore } from "../src/commands/init.js";
 import { annotation, needsIsolatedDb, skipReason, type PullRequestEvent } from "../src/commands/pr.js";
@@ -48,10 +54,10 @@ describe("parseJsonc", () => {
 });
 
 describe("loadConfig", () => {
-  it("takes the worker name from wrangler and the rest from swp.config.json", () => {
+  it("takes the worker name from wrangler and the rest from supabase-worker-previews.json", () => {
     const dir = project({
       "wrangler.jsonc": wrangler(null),
-      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT, trunk: "develop" }),
+      "supabase-worker-previews.json": JSON.stringify({ supabaseProjectRef: PARENT, trunk: "develop" }),
     });
     expect(loadConfig({}, dir)).toMatchObject({
       worker: "app",
@@ -61,26 +67,41 @@ describe("loadConfig", () => {
     });
   });
 
+  it("still reads swp.config.json, the name before 0.2.0, but only when the new file is absent", () => {
+    const legacy = project({
+      "wrangler.jsonc": wrangler(null),
+      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT, trunk: "old" }),
+    });
+    expect(loadConfig({}, legacy).trunk).toBe("old");
+    writeFileSync(
+      join(legacy, "supabase-worker-previews.json"),
+      JSON.stringify({ supabaseProjectRef: PARENT, trunk: "new" }),
+    );
+    expect(loadConfig({}, legacy).trunk).toBe("new");
+    const broken = project({ "wrangler.jsonc": wrangler(null), "swp.config.json": "{" });
+    expect(() => loadConfig({}, broken)).toThrow(/Cannot parse swp.config.json/);
+  });
+
   it("requires the production project, and says to run init when there is no config", () => {
     expect(() => loadConfig({}, project({ "wrangler.json": wrangler(null) }))).toThrow(
-      /No swp.config.json in this directory. Run `swp init` first, or pass --project-ref/,
+      /No supabase-worker-previews.json in this directory. Run `supabase-worker-previews init` first, or pass --project-ref/,
     );
-    const dir = project({ "wrangler.json": wrangler(null), "swp.config.json": "{}" });
+    const dir = project({ "wrangler.json": wrangler(null), "supabase-worker-previews.json": "{}" });
     expect(() => loadConfig({}, dir)).toThrow(/Set "supabaseProjectRef"/);
   });
 
   it("refuses the placeholder init writes, an unknown key and unparseable JSON, naming the file", () => {
     const config = (text: string) => () =>
-      loadConfig({}, project({ "wrangler.json": wrangler(null), "swp.config.json": text }));
+      loadConfig({}, project({ "wrangler.json": wrangler(null), "supabase-worker-previews.json": text }));
     expect(config('{ "supabaseProjectRef": "<production project ref>" }')).toThrow(/is still <production/);
     expect(config(`{ "supabaseProjectRef": "${PARENT}", "trunck": "main" }`)).toThrow(
-      /Unknown key "trunck" in swp.config.json. Did you mean "trunk"\?/,
+      /Unknown key "trunck" in supabase-worker-previews.json. Did you mean "trunk"\?/,
     );
-    expect(config("{ ")).toThrow(/^Cannot parse swp.config.json: /);
+    expect(config("{ ")).toThrow(/^Cannot parse supabase-worker-previews.json: /);
   });
 
-  it("says where to run swp when there is no wrangler config", () => {
-    const dir = project({ "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT }) });
+  it("says where to run supabase-worker-previews when there is no wrangler config", () => {
+    const dir = project({ "supabase-worker-previews.json": JSON.stringify({ supabaseProjectRef: PARENT }) });
     expect(() => loadConfig({}, dir)).toThrow(
       /No wrangler.jsonc, wrangler.json, wrangler.toml in this directory/,
     );
@@ -89,15 +110,17 @@ describe("loadConfig", () => {
   it("rejects an unknown choice", () => {
     const dir = project({
       "wrangler.jsonc": wrangler(null),
-      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT, apiKeys: "anon" }),
+      "supabase-worker-previews.json": JSON.stringify({ supabaseProjectRef: PARENT, apiKeys: "anon" }),
     });
-    expect(() => loadConfig({}, dir)).toThrow(/"apiKeys" in swp.config.json must be "legacy" or "new"/);
+    expect(() => loadConfig({}, dir)).toThrow(
+      /"apiKeys" in supabase-worker-previews.json must be "legacy" or "new"/,
+    );
   });
 
   it("reads the worker name from wrangler.toml", () => {
     const dir = project({
       "wrangler.toml": `# the worker\nname = "toml-app"\nmain = "src/worker.ts"\n`,
-      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT }),
+      "supabase-worker-previews.json": JSON.stringify({ supabaseProjectRef: PARENT }),
     });
     expect(loadConfig({}, dir).worker).toBe("toml-app");
   });
@@ -110,6 +133,22 @@ describe("loadConfig", () => {
 });
 
 describe("doctor", () => {
+  it("warns about the names from before 0.2.0 and says what to rename them to", async () => {
+    const dir = project({
+      "wrangler.jsonc": wrangler(null),
+      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT }),
+      ".env.swp": "X=1\n",
+    });
+    const findings = (await doctor({}, undefined, dir)).flatMap((section) => section.findings);
+    const text = findings.map((f) => `${f.level}: ${f.message} ${f.fix ?? ""}`).join("\n");
+    expect(text).toMatch(
+      /warn: swp.config.json is the name from before 0.2.0 Rename it to supabase-worker-previews.json/,
+    );
+    expect(text).toMatch(
+      /warn: .env.swp is the name from before 0.2.0 Rename it to .env.supabase-worker-previews/,
+    );
+  });
+
   const config: Config = {
     worker: "app",
     supabaseProjectRef: PARENT,
@@ -296,6 +335,17 @@ describe("doctor online", () => {
 });
 
 describe("init", () => {
+  it("leaves a legacy swp.config.json alone instead of writing a second config", () => {
+    const dir = project({
+      "wrangler.jsonc": wrangler(null),
+      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT }),
+    });
+    const lines: string[] = [];
+    init({ supabaseProjectRef: PARENT, log: (l) => lines.push(l) }, dir);
+    expect(readdirSync(dir)).not.toContain("supabase-worker-previews.json");
+    expect(lines.join("\n")).toContain("- swp.config.json exists, left alone");
+  });
+
   it("dates the grants migration before the existing ones", () => {
     expect(timestampBefore("20260914000000_x.sql")).toBe("20260913235959");
     const dir = project({
@@ -306,7 +356,7 @@ describe("init", () => {
     expect(readdirSync(join(dir, "supabase/migrations")).sort()[0]).toBe(
       "20260913235959_api_default_privileges.sql",
     );
-    expect(JSON.parse(readFileSync(join(dir, "swp.config.json"), "utf8"))).toEqual({
+    expect(JSON.parse(readFileSync(join(dir, "supabase-worker-previews.json"), "utf8"))).toEqual({
       supabaseProjectRef: PARENT,
       trunk: "main",
     });
@@ -320,7 +370,7 @@ describe("init", () => {
     const lines: string[] = [];
     init({ supabaseProjectRef: PARENT, dryRun: true, log: (l) => lines.push(l) }, dir);
     expect(readdirSync(dir)).toEqual(["wrangler.jsonc"]);
-    expect(lines.join("\n")).toMatch(/Dry run: nothing is written[\s\S]*\+ swp.config.json/);
+    expect(lines.join("\n")).toMatch(/Dry run: nothing is written[\s\S]*\+ supabase-worker-previews.json/);
   });
 
   it("writes the published-action workflow with --action", () => {

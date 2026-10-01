@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
-    "doctor": "swp doctor"
+    "doctor": "supabase-worker-previews doctor"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

@@ -36,7 +36,7 @@ export function previewKey(gitBranch: string, config: Config, pr?: number): stri
   return `pr-${pr}`;
 }
 
-/** A branch `swp` may delete: never production, the shared database, the trunk's or a persistent one. */
+/** A branch `supabase-worker-previews` may delete: never production, the shared database, the trunk's or a persistent one. */
 export function isDisposable(branch: Branch, config: Config): boolean {
   return (
     !branch.is_default &&
@@ -86,7 +86,7 @@ export async function shared(deps: Deps): Promise<string> {
   if (!branches.some((b) => b.is_default))
     throw new Error(
       `Branching is not enabled on ${parent}. Connect the repo in the Supabase dashboard ` +
-        "(project settings, Integrations, GitHub, automatic branching on), then run swp shared again.",
+        "(project settings, Integrations, GitHub, automatic branching on), then run supabase-worker-previews shared again.",
     );
   let branch = branches.find((b) => b.name === config.sharedBranch);
   if (!branch) {

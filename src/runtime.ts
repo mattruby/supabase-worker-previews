@@ -139,7 +139,7 @@ function envOrProcessEnv<E extends object>(env: E | undefined): E {
 /**
  * Wraps a Worker's default export. Every handler sees the override applied;
  * `fetch` also injects the public config and answers the identity route that
- * `swp check` reads.
+ * `supabase-worker-previews check` reads.
  */
 export function withSupabasePreviews<H extends object, E extends object = EnvOf<H>>(
   handler: H & Handler,

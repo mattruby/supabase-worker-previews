@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CONFIG_FILE,
+  configFileIn,
   migrationFiles,
   migrationsDir,
   PLACEHOLDER_REF,
@@ -70,10 +71,12 @@ export function init(options: InitOptions = {}, cwd = process.cwd()): void {
   const wrangler = readWranglerConfig(cwd);
   if (!wrangler)
     throw new Error(
-      `No ${WRANGLER_FILES.join(", ")} in this directory. Run swp init in the Worker's directory.`,
+      `No ${WRANGLER_FILES.join(", ")} in this directory. Run supabase-worker-previews init in the Worker's directory.`,
     );
   if (!wrangler.name)
-    throw new Error(`${wrangler.file} has no "name". Add the Worker's name, then run swp init again.`);
+    throw new Error(
+      `${wrangler.file} has no "name". Add the Worker's name, then run supabase-worker-previews init again.`,
+    );
   const write = (path: string, content: string | Buffer) => {
     if (options.dryRun) return;
     mkdirSync(dirname(path), { recursive: true });
@@ -81,11 +84,11 @@ export function init(options: InitOptions = {}, cwd = process.cwd()): void {
   };
   if (options.dryRun) log("Dry run: nothing is written.\n");
 
-  const configPath = join(cwd, CONFIG_FILE);
+  const configPath = join(cwd, configFileIn(cwd));
   let needsRef: boolean;
   if (existsSync(configPath)) {
     needsRef = !hasProjectRef(readFileSync(configPath, "utf8"));
-    log(`- ${CONFIG_FILE} exists, left alone`);
+    log(`- ${basename(configPath)} exists, left alone`);
   } else {
     const linked = linkedProjectRef(cwd);
     const ref = options.supabaseProjectRef ?? linked;
@@ -147,7 +150,7 @@ export function init(options: InitOptions = {}, cwd = process.cwd()): void {
     ...(wrangler.json.previews
       ? []
       : [`Add a "previews" block to ${wrangler.file}, redeclaring every binding the Worker uses.`]),
-    "Put SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in .env.swp\n" +
+    "Put SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in .env.supabase-worker-previews\n" +
       `(git-ignore it; scopes: ${TOKENS_URL}),\n` +
       "then run `npx supabase-worker-previews shared` and paste the previews.vars it prints.",
     "Wrap the Worker's default export:\n" +

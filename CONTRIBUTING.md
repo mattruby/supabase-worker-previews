@@ -12,14 +12,14 @@ cd supabase-worker-previews
 npm install        # also builds dist/ through the prepare script
 ```
 
-| Command                | What it does                                                         |
-| ---------------------- | -------------------------------------------------------------------- |
-| `npm test`             | Unit tests (Vitest)                                                  |
-| `npm run typecheck`    | `tsc --noEmit` over `src/` and `test/`                               |
-| `npm run lint`         | ESLint with typescript-eslint's type-checked rules                   |
-| `npm run format:check` | Prettier, as CI runs it (`npm run format` to fix)                    |
-| `npm run build`        | Compiles `src/` to `dist/`                                           |
-| `npm run test:package` | Packs the tarball, installs it in a temp project, runs `swp` from it |
+| Command                | What it does                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------- |
+| `npm test`             | Unit tests (Vitest)                                                                       |
+| `npm run typecheck`    | `tsc --noEmit` over `src/` and `test/`                                                    |
+| `npm run lint`         | ESLint with typescript-eslint's type-checked rules                                        |
+| `npm run format:check` | Prettier, as CI runs it (`npm run format` to fix)                                         |
+| `npm run build`        | Compiles `src/` to `dist/`                                                                |
+| `npm run test:package` | Packs the tarball, installs it in a temp project, runs `supabase-worker-previews` from it |
 
 CI runs all of these on Node 22, 24 and 26, plus the packaging check on Node 22.0.0, the oldest version `engines` allows. Run them locally before opening a pull request.
 

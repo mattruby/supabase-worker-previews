@@ -1,6 +1,6 @@
 # Concepts
 
-The five ideas `swp` is built on, for anyone new to Cloudflare Worker Previews, Supabase branching, or both. Read this first; it takes about five minutes.
+The five ideas `supabase-worker-previews` is built on, for anyone new to Cloudflare Worker Previews, Supabase branching, or both. Read this first; it takes about five minutes.
 
 ```mermaid
 flowchart LR
@@ -29,7 +29,7 @@ https://<branch slug>-<worker>.<subdomain>.workers.dev
 
 [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/build-branches/) creates one when you push a branch that is not your production branch, by running `npx wrangler preview`. Each push to that branch deploys a new version to the same Preview and URL.
 
-Two details shape everything `swp` does:
+Two details shape everything `supabase-worker-previews` does:
 
 - **Previews have their own config.** They inherit no bindings and no `vars` from the top level of your wrangler config. You declare them again in a `previews` block ([Cloudflare: configuration](https://developers.cloudflare.com/workers/previews/configuration/)).
 - **Preview secrets are copied once.** A Preview copies the "base config" secrets when it is created and keeps that copy. Later changes reach only new Previews.
@@ -42,7 +42,7 @@ A branch can also be **persistent**: it stays until you delete it and follows a 
 
 ## The shared Preview database and its own database
 
-Most PRs do not change the schema, and giving each of them a fresh database would be slow and costly. So `swp` uses two kinds of database for Previews:
+Most PRs do not change the schema, and giving each of them a fresh database would be slow and costly. So `supabase-worker-previews` uses two kinds of database for Previews:
 
 | A PR that...                                            | Gets                            | Which is                                                              |
 | ------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
@@ -74,7 +74,7 @@ GET /.well-known/supabase-preview
 { "projectRef": "<ref>", "supabaseUrl": "https://<ref>.supabase.co" }
 ```
 
-`swp check` reads this route on every PR and passes only when the ref is the database the PR should have. If it ever sees production, it fails at once. That check is what turns "the deploy succeeded" into "this Preview is on the right database".
+`supabase-worker-previews check` reads this route on every PR and passes only when the ref is the database the PR should have. If it ever sees production, it fails at once. That check is what turns "the deploy succeeded" into "this Preview is on the right database".
 
 ## Where to go next
 

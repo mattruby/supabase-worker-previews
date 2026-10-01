@@ -17,10 +17,10 @@ export type PullRequestEvent = {
 export function readEvent(path = process.env.GITHUB_EVENT_PATH): PullRequestEvent {
   if (!path)
     throw new Error(
-      "GITHUB_EVENT_PATH is not set: `swp pr` runs inside a pull_request workflow. To try one branch here, use `swp up` or `swp check`.",
+      "GITHUB_EVENT_PATH is not set: `supabase-worker-previews pr` runs inside a pull_request workflow. To try one branch here, use `supabase-worker-previews up` or `supabase-worker-previews check`.",
     );
   const event = JSON.parse(readFileSync(path, "utf8")) as PullRequestEvent;
-  if (!event.pull_request) throw new Error("`swp pr` needs a pull_request event");
+  if (!event.pull_request) throw new Error("`supabase-worker-previews pr` needs a pull_request event");
   return event;
 }
 
@@ -45,14 +45,14 @@ export function skipReason(
   if (head !== undefined && head?.full_name !== event.repository.full_name)
     return {
       level: "notice",
-      message: `swp pr skipped PR #${event.number}: it comes from ${head ? `the fork ${head.full_name}` : "a deleted fork"}, and GitHub Actions gives fork PRs no secrets`,
+      message: `supabase-worker-previews pr skipped PR #${event.number}: it comes from ${head ? `the fork ${head.full_name}` : "a deleted fork"}, and GitHub Actions gives fork PRs no secrets`,
     };
   const missing = PR_ENV.filter((name) => !env[name]);
   if (missing.length) {
     const bot = env.GITHUB_ACTOR?.endsWith("[bot]") ?? false;
     return {
       level: bot ? "warning" : "error",
-      message: `swp pr ${bot ? "skipped" : "cannot check"} PR #${event.number}: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} empty; add ${missing.length === 1 ? "it" : "them"} to the repository's Actions secrets`,
+      message: `supabase-worker-previews pr ${bot ? "skipped" : "cannot check"} PR #${event.number}: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} empty; add ${missing.length === 1 ? "it" : "them"} to the repository's Actions secrets`,
     };
   }
   return null;

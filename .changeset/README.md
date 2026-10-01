@@ -1,6 +1,6 @@
 # Changesets
 
-Every pull request that changes what users get (the `swp` CLI, the runtime entry, the templates) adds a changeset:
+Every pull request that changes what users get (the CLI, the runtime entry, the templates) adds a changeset:
 
 ```sh
 npx changeset

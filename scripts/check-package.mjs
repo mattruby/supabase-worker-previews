@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Packs the package, installs the tarball into a throwaway project, and uses it the way a
-// consumer would: the swp bin, `swp init` on a fixture Worker, the ESM runtime entry, and its types.
+// consumer would: the supabase-worker-previews bin, `supabase-worker-previews init` on a fixture Worker, the ESM runtime entry, and its types.
 // Set KEEP_PACKAGE_CHECK=1 to keep the temp directory for inspection.
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -75,34 +75,31 @@ try {
   );
   check(install.status === 0, `npm install of the tarball${install.status ? `\n${install.stderr}` : ""}`);
 
-  const swp = join(consumer, "node_modules", ".bin", process.platform === "win32" ? "swp.cmd" : "swp");
-  const help = run(swp, ["--help"], consumer);
-  check(
-    help.status === 0 && help.stdout.includes("Usage: swp <command>"),
-    "swp --help prints the usage and exits 0",
-  );
-  const helpCommand = run(swp, ["help"], consumer);
-  check(helpCommand.status === 0 && helpCommand.stdout.includes("Usage: swp <command>"), "swp help exits 0");
-  const version = run(swp, ["--version"], consumer);
-  check(
-    version.status === 0 && version.stdout.trim() === packed.version,
-    `swp --version prints ${packed.version}${version.status ? `\n${version.stderr}` : ""}`,
-  );
-  const longName = join(
+  const cli = join(
     consumer,
     "node_modules",
     ".bin",
     process.platform === "win32" ? "supabase-worker-previews.cmd" : "supabase-worker-previews",
   );
-  const longVersion = run(longName, ["--version"], consumer);
+  const help = run(cli, ["--help"], consumer);
   check(
-    longVersion.status === 0 && longVersion.stdout.trim() === packed.version,
-    "supabase-worker-previews --version runs the same CLI",
+    help.status === 0 && help.stdout.includes("Usage: supabase-worker-previews <command>"),
+    "supabase-worker-previews --help prints the usage and exits 0",
   );
-  const unknown = run(swp, ["doctr"], consumer);
+  const helpCommand = run(cli, ["help"], consumer);
   check(
-    unknown.status === 2 && unknown.stderr.includes('"swp doctor"'),
-    "swp doctr suggests swp doctor and exits 2",
+    helpCommand.status === 0 && helpCommand.stdout.includes("Usage: supabase-worker-previews <command>"),
+    "supabase-worker-previews help exits 0",
+  );
+  const version = run(cli, ["--version"], consumer);
+  check(
+    version.status === 0 && version.stdout.trim() === packed.version,
+    `supabase-worker-previews --version prints ${packed.version}${version.status ? `\n${version.stderr}` : ""}`,
+  );
+  const unknown = run(cli, ["doctr"], consumer);
+  check(
+    unknown.status === 2 && unknown.stderr.includes('"supabase-worker-previews doctor"'),
+    "supabase-worker-previews doctr suggests supabase-worker-previews doctor and exits 2",
   );
 
   const app = join(tmp, "app");
@@ -111,22 +108,28 @@ try {
     join(app, "wrangler.jsonc"),
     `{\n  // fixture Worker\n  "name": "fixture-app",\n  "main": "src/index.ts",\n  "compatibility_date": "2026-09-01",\n}\n`,
   );
-  const init = run(swp, ["init", "--project-ref", "abcdefghijklmnopqrst", "--trunk", "main"], app);
-  check(init.status === 0, `swp init on a fixture wrangler.jsonc${init.status ? `\n${init.stderr}` : ""}`);
-  const config = existsSync(join(app, "swp.config.json"))
-    ? JSON.parse(readFileSync(join(app, "swp.config.json"), "utf8"))
+  const init = run(cli, ["init", "--project-ref", "abcdefghijklmnopqrst", "--trunk", "main"], app);
+  check(
+    init.status === 0,
+    `supabase-worker-previews init on a fixture wrangler.jsonc${init.status ? `\n${init.stderr}` : ""}`,
+  );
+  const config = existsSync(join(app, "supabase-worker-previews.json"))
+    ? JSON.parse(readFileSync(join(app, "supabase-worker-previews.json"), "utf8"))
     : {};
-  check(config.supabaseProjectRef === "abcdefghijklmnopqrst", "swp init wrote swp.config.json");
+  check(
+    config.supabaseProjectRef === "abcdefghijklmnopqrst",
+    "supabase-worker-previews init wrote supabase-worker-previews.json",
+  );
   const migrations = existsSync(join(app, "supabase", "migrations"))
     ? readdirSync(join(app, "supabase", "migrations"))
     : [];
   check(
     migrations.some((f) => f.endsWith("_api_default_privileges.sql")),
-    "swp init wrote the grants migration from the shipped template",
+    "supabase-worker-previews init wrote the grants migration from the shipped template",
   );
   check(
     existsSync(join(app, ".github", "workflows", "supabase-previews.yml")),
-    "swp init wrote the workflow from the shipped template",
+    "supabase-worker-previews init wrote the workflow from the shipped template",
   );
 
   writeFileSync(

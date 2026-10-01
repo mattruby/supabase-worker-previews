@@ -4,30 +4,30 @@ Reference for every command, flag, environment variable and config field, the wr
 
 ## Commands
 
-`swp --help` lists them in three groups; `swp <command> --help` (or `swp help <command>`) shows one command's flags and examples, and `swp --version` (or `-v`) prints the version.
+`supabase-worker-previews --help` lists them in three groups; `supabase-worker-previews <command> --help` (or `supabase-worker-previews help <command>`) shows one command's flags and examples, and `supabase-worker-previews --version` (or `-v`) prints the version.
 
 **Set up**
 
-| Command                                                                    | Does                                                                                                                      |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `swp init [--project-ref <ref>] [--trunk <branch>] [--action] [--dry-run]` | Scaffold `swp.config.json`, the grants migration and the PR workflow (never overwrites)                                   |
-| `swp doctor`                                                               | Check wrangler, the `previews` block, bindings, static HTML, grants migration, auth redirects; with a token, Supabase too |
-| `swp shared`                                                               | Create or repair the shared Preview database; prints its `previews.vars`                                                  |
+| Command                                                                                         | Does                                                                                                                      |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `supabase-worker-previews init [--project-ref <ref>] [--trunk <branch>] [--action] [--dry-run]` | Scaffold `supabase-worker-previews.json`, the grants migration and the PR workflow (never overwrites)                     |
+| `supabase-worker-previews doctor`                                                               | Check wrangler, the `previews` block, bindings, static HTML, grants migration, auth redirects; with a token, Supabase too |
+| `supabase-worker-previews shared`                                                               | Create or repair the shared Preview database; prints its `previews.vars`                                                  |
 
 **Per branch**
 
-| Command                                            | Does                                                                          |
-| -------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `swp up [--branch <b>] [--pr <n>]`                 | Give a branch's Preview its own database                                      |
-| `swp check [--branch <b>] [--pr <n>] [--isolated]` | Fail unless the Preview serves the right database; fail at once on production |
-| `swp down [--branch <b>] [--pr <n>]`               | Delete the Preview and its own database                                       |
+| Command                                                                 | Does                                                                          |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `supabase-worker-previews up [--branch <b>] [--pr <n>]`                 | Give a branch's Preview its own database                                      |
+| `supabase-worker-previews check [--branch <b>] [--pr <n>] [--isolated]` | Fail unless the Preview serves the right database; fail at once on production |
+| `supabase-worker-previews down [--branch <b>] [--pr <n>]`               | Delete the Preview and its own database                                       |
 
 **In CI**
 
-| Command                                    | Does                                                                                                          |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `swp pr [--no-comment] [--no-deployments]` | Inside a `pull_request` workflow: `down` on close, else `up` or `release`, then `check`, and report on the PR |
-| `swp prune [--repo <owner/name>] [--yes]`  | List leftovers of deleted branches and closed PRs; delete them with `--yes`                                   |
+| Command                                                         | Does                                                                                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `supabase-worker-previews pr [--no-comment] [--no-deployments]` | Inside a `pull_request` workflow: `down` on close, else `up` or `release`, then `check`, and report on the PR |
+| `supabase-worker-previews prune [--repo <owner/name>] [--yes]`  | List leftovers of deleted branches and closed PRs; delete them with `--yes`                                   |
 
 - `--branch` defaults to `WORKERS_CI_BRANCH`, then `GITHUB_HEAD_REF`, then the current git branch.
 - `--pr <n>` names the PR whose `pr-<n>` Preview to use when `previewName` is `"pr"`.
@@ -35,46 +35,46 @@ Reference for every command, flag, environment variable and config field, the wr
 - `--repo` defaults to `GITHUB_REPOSITORY`, then the repo of the `origin` remote.
 - `init --action` writes a workflow that uses the published [GitHub Action](#github-action) instead of `npx supabase-worker-previews pr`.
 
-A mistyped command, flag or `swp.config.json` key gets a suggestion (`Unknown command "sharde". Did you mean "swp shared"?`). Unknown flags and stray arguments exit 2.
+A mistyped command, flag or `supabase-worker-previews.json` key gets a suggestion (`Unknown command "sharde". Did you mean "supabase-worker-previews shared"?`). Unknown flags and stray arguments exit 2.
 
 ### Common flags
 
 | Flag                  | Effect                                                                                                                                       |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--dry-run`           | Print the plan instead of changing anything; the output opens with `Dry run: reads only, changes nothing.` Not on `doctor`, which only reads |
-| `--dotenv <path>`     | Load tokens from this file (default `.env.swp` when it exists). Not `--env-file`: Node claims that flag for itself                           |
-| `--worker <name>`     | Overrides `worker` in `swp.config.json`                                                                                                      |
+| `--dotenv <path>`     | Load tokens from this file (default `.env.supabase-worker-previews` when it exists). Not `--env-file`: Node claims that flag for itself      |
+| `--worker <name>`     | Overrides `worker` in `supabase-worker-previews.json`                                                                                        |
 | `--project-ref <ref>` | Overrides `supabaseProjectRef`                                                                                                               |
 | `--trunk <branch>`    | Overrides `trunk`                                                                                                                            |
 | `-h`, `--help`        | Show help                                                                                                                                    |
 | `-v`, `--version`     | Print the version                                                                                                                            |
 
-`init` takes only `--project-ref`, `--trunk`, `--action` and `--dry-run`. `swp <command> --help` lists exactly what each command accepts.
+`init` takes only `--project-ref`, `--trunk`, `--action` and `--dry-run`. `supabase-worker-previews <command> --help` lists exactly what each command accepts.
 
 In `--dry-run`, `shared`, `up`, `check`, `down`, `pr` and `prune` still need `SUPABASE_ACCESS_TOKEN` (and `GITHUB_TOKEN` for `pr` and `prune`), because the reads still happen.
 
 ### Environment
 
-| Variable                | Needed by                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `SUPABASE_ACCESS_TOKEN` | `shared`, `up`, `check`, `down`, `pr`, `prune`; `doctor` for its online checks |
-| `CLOUDFLARE_API_TOKEN`  | `shared`, `up`, `check`, `down`, `pr`, `prune`                                 |
-| `CLOUDFLARE_ACCOUNT_ID` | the same                                                                       |
-| `GITHUB_TOKEN`          | `pr`, `prune`                                                                  |
-| `SWP_DEBUG`             | optional: set to `1` to print the stack trace of an error                      |
+| Variable                         | Needed by                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------ |
+| `SUPABASE_ACCESS_TOKEN`          | `shared`, `up`, `check`, `down`, `pr`, `prune`; `doctor` for its online checks |
+| `CLOUDFLARE_API_TOKEN`           | `shared`, `up`, `check`, `down`, `pr`, `prune`                                 |
+| `CLOUDFLARE_ACCOUNT_ID`          | the same                                                                       |
+| `GITHUB_TOKEN`                   | `pr`, `prune`                                                                  |
+| `SUPABASE_WORKER_PREVIEWS_DEBUG` | optional: set to `1` to print the stack trace of an error                      |
 
 A command missing a token names each one and where to get it. A rejected token fails with one line ending `<TOKEN> is invalid or expired; see <tokens guide>`.
 
 [Tokens](tokens.md) lists the least-privilege scopes for each.
 
-## `swp.config.json`
+## `supabase-worker-previews.json`
 
-`swp init` writes the first two fields. Everything else has a default.
+`supabase-worker-previews init` writes the first two fields. Everything else has a default.
 
 | Field                   | Default         | Meaning                                                                               |
 | ----------------------- | --------------- | ------------------------------------------------------------------------------------- |
 | `supabaseProjectRef`    | (required)      | The production project. Previews must never serve it                                  |
-| `worker`                | wrangler `name` | The Worker whose Previews `swp` manages                                               |
+| `worker`                | wrangler `name` | The Worker whose Previews `supabase-worker-previews` manages                          |
 | `trunk`                 | `main`          | The git branch the shared Preview database tracks                                     |
 | `sharedBranch`          | `preview`       | Name of the Supabase branch that is the shared Preview database                       |
 | `supabaseDir`           | `supabase`      | A PR that changes files under it gets its own database                                |
@@ -83,15 +83,15 @@ A command missing a token names each one and where to get it. A rejected token f
 | `workersSubdomain`      | looked up       | Your `*.workers.dev` subdomain                                                        |
 | `previewName`           | `"branch"`      | `"branch"`: Previews named after the git branch (Workers Builds). `"pr"`: `pr-<n>`    |
 | `apiKeys`               | `"legacy"`      | Key pair to hand Previews when a branch has both: `"legacy"` (JWT) or `"new"` (`sb_`) |
-| `prComment`             | `true`          | `swp pr` keeps one status comment on the PR                                           |
-| `githubDeployments`     | `true`          | `swp pr` records a GitHub deployment for the PR head                                  |
+| `prComment`             | `true`          | `supabase-worker-previews pr` keeps one status comment on the PR                      |
+| `githubDeployments`     | `true`          | `supabase-worker-previews pr` records a GitHub deployment for the PR head             |
 | `deploymentEnvironment` | `"Preview"`     | GitHub environment for those deployments; `{branch}` in it makes one per branch       |
 
 [How it works](how-it-works.md) explains [`apiKeys`](how-it-works.md#which-api-keys) and [`previewName`](how-it-works.md#preview-names-previewname).
 
 ## The wrangler config
 
-`swp` reads the first of `wrangler.jsonc`, `wrangler.json` and `wrangler.toml` it finds. Previews inherit no bindings and no `vars` from the top level ([Cloudflare: configuration](https://developers.cloudflare.com/workers/previews/configuration/)), so the `previews` block redeclares every binding the Worker uses:
+`supabase-worker-previews` reads the first of `wrangler.jsonc`, `wrangler.json` and `wrangler.toml` it finds. Previews inherit no bindings and no `vars` from the top level ([Cloudflare: configuration](https://developers.cloudflare.com/workers/previews/configuration/)), so the `previews` block redeclares every binding the Worker uses:
 
 ```jsonc
 {
@@ -114,13 +114,13 @@ A command missing a token names each one and where to get it. A rejected token f
 }
 ```
 
-In `wrangler.toml` the same keys go under a `[previews]` table. `swp shared` prints the three `previews.vars` values. They are public; commit them. The shared Preview database's secret key goes in the Preview base config as `SUPABASE_SERVICE_ROLE_KEY`, which `swp shared` writes for you.
+In `wrangler.toml` the same keys go under a `[previews]` table. `supabase-worker-previews shared` prints the three `previews.vars` values. They are public; commit them. The shared Preview database's secret key goes in the Preview base config as `SUPABASE_SERVICE_ROLE_KEY`, which `supabase-worker-previews shared` writes for you.
 
 `doctor` checks that `previews.vars` exists, names the shared Preview database and not production, holds no secret, and that every top-level binding and var is redeclared.
 
 ## PR feedback
 
-`swp pr` keeps one status comment on the PR and records a GitHub deployment, which gives the PR a "View deployment" button. Neither can fail the job: a GitHub API error becomes a `::warning::` line. Neither is written in `--dry-run`.
+`supabase-worker-previews pr` keeps one status comment on the PR and records a GitHub deployment, which gives the PR a "View deployment" button. Neither can fail the job: a GitHub API error becomes a `::warning::` line. Neither is written in `--dry-run`.
 
 | To                                   | Set                                                 |
 | ------------------------------------ | --------------------------------------------------- |
@@ -139,7 +139,7 @@ permissions:
 
 ## GitHub Action
 
-Instead of installing the package and calling `npx supabase-worker-previews pr`, a workflow can use the action ([full template](../templates/supabase-previews-action.yml)). It runs the project's installed `swp` when there is one, else `supabase-worker-previews@<version>`.
+Instead of installing the package and calling `npx supabase-worker-previews pr`, a workflow can use the action ([full template](../templates/supabase-previews-action.yml)). It runs the project's installed `supabase-worker-previews` when there is one, else `supabase-worker-previews@<version>`.
 
 ```yaml
 - uses: actions/checkout@v4
@@ -150,18 +150,18 @@ Instead of installing the package and calling `npx supabase-worker-previews pr`,
     cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
-| Input                   | Default        | Effect                                                      |
-| ----------------------- | -------------- | ----------------------------------------------------------- |
-| `command`               | `pr`           | The `swp` command to run                                    |
-| `args`                  | (none)         | Extra arguments, such as `--dry-run`; split on spaces       |
-| `working-directory`     | `.`            | Directory holding `swp.config.json` and the wrangler config |
-| `version`               | `"0"`          | Version to download when the project does not install `swp` |
-| `github-token`          | `github.token` | Token for the PR comment and the deployment                 |
-| `supabase-access-token` | (required)     | Organization-scoped Supabase access token                   |
-| `cloudflare-api-token`  | (required)     | Cloudflare API token that can manage the Worker's Previews  |
-| `cloudflare-account-id` | (required)     | Cloudflare account ID                                       |
-| `comment`               | `"true"`       | `"false"` passes `--no-comment`                             |
-| `deployments`           | `"true"`       | `"false"` passes `--no-deployments`                         |
+| Input                   | Default        | Effect                                                                           |
+| ----------------------- | -------------- | -------------------------------------------------------------------------------- |
+| `command`               | `pr`           | The `supabase-worker-previews` command to run                                    |
+| `args`                  | (none)         | Extra arguments, such as `--dry-run`; split on spaces                            |
+| `working-directory`     | `.`            | Directory holding `supabase-worker-previews.json` and the wrangler config        |
+| `version`               | `"0"`          | Version to download when the project does not install `supabase-worker-previews` |
+| `github-token`          | `github.token` | Token for the PR comment and the deployment                                      |
+| `supabase-access-token` | (required)     | Organization-scoped Supabase access token                                        |
+| `cloudflare-api-token`  | (required)     | Cloudflare API token that can manage the Worker's Previews                       |
+| `cloudflare-account-id` | (required)     | Cloudflare account ID                                                            |
+| `comment`               | `"true"`       | `"false"` passes `--no-comment`                                                  |
+| `deployments`           | `"true"`       | `"false"` passes `--no-deployments`                                              |
 
 See [action.yml](../action.yml).
 
@@ -198,13 +198,13 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
 ### The Worker's Supabase variables
 
-| Name                        | Where it comes from                                                          |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| `SUPABASE_URL`              | `vars` (production), `previews.vars` (shared Preview database), the override |
-| `SUPABASE_PUBLISHABLE_KEY`  | the same                                                                     |
-| `SUPABASE_PROJECT_REF`      | the same                                                                     |
-| `SUPABASE_SERVICE_ROLE_KEY` | a secret: production's, the Preview base config, or the override             |
-| `SUPABASE_OVERRIDE`         | a Preview secret `swp up` writes for a PR with its own database              |
+| Name                        | Where it comes from                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `SUPABASE_URL`              | `vars` (production), `previews.vars` (shared Preview database), the override         |
+| `SUPABASE_PUBLISHABLE_KEY`  | the same                                                                             |
+| `SUPABASE_PROJECT_REF`      | the same                                                                             |
+| `SUPABASE_SERVICE_ROLE_KEY` | a secret: production's, the Preview base config, or the override                     |
+| `SUPABASE_OVERRIDE`         | a Preview secret `supabase-worker-previews up` writes for a PR with its own database |
 
 ---
 

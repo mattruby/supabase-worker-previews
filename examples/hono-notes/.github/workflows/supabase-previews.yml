@@ -1,7 +1,7 @@
 name: Preview database
 
 # The same job as supabase-previews.yml, through the published action. It runs
-# the project's installed swp when there is one, else downloads the package.
+# the project's installed supabase-worker-previews when there is one, else downloads the package.
 
 on:
   pull_request:

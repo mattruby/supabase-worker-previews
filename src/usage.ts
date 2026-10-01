@@ -28,10 +28,22 @@ const WITH_GITHUB = [...TOKENS, "GITHUB_TOKEN"];
 
 const DRY_RUN: Flag = { name: "dry-run", help: "Print the plan; change nothing" };
 const OVERRIDES: Flag[] = [
-  { name: "dotenv", value: "<path>", help: "Load tokens from this file (default: .env.swp when present)" },
+  {
+    name: "dotenv",
+    value: "<path>",
+    help: "Load tokens from this file (default: .env.supabase-worker-previews when present)",
+  },
   { name: "worker", value: "<name>", help: 'Worker name (default: "name" in the wrangler config)' },
-  { name: "project-ref", value: "<ref>", help: "Production project ref (default: swp.config.json)" },
-  { name: "trunk", value: "<branch>", help: "Branch the shared database tracks (default: swp.config.json)" },
+  {
+    name: "project-ref",
+    value: "<ref>",
+    help: "Production project ref (default: supabase-worker-previews.json)",
+  },
+  {
+    name: "trunk",
+    value: "<branch>",
+    help: "Branch the shared database tracks (default: supabase-worker-previews.json)",
+  },
 ];
 const BRANCH: Flag[] = [
   { name: "branch", value: "<b>", help: "Git branch (default: the current one, or the CI branch)" },
@@ -47,9 +59,9 @@ export const COMMANDS: Command[] = [
     name: "init",
     group: "Set up",
     args: "[--project-ref <ref>] [--trunk <branch>] [--action]",
-    summary: "Scaffold swp.config.json, the grants migration and the PR workflow",
+    summary: "Scaffold supabase-worker-previews.json, the grants migration and the PR workflow",
     details:
-      "Writes swp.config.json, a first migration that grants the API roles default privileges, and\n" +
+      "Writes supabase-worker-previews.json, a first migration that grants the API roles default privileges, and\n" +
       ".github/workflows/supabase-previews.yml. Never overwrites a file; run it again safely.",
     flags: [
       { name: "project-ref", value: "<ref>", help: "Production project ref (default: from `supabase link`)" },
@@ -66,7 +78,10 @@ export const COMMANDS: Command[] = [
     ],
     env: [],
     dryRunEnv: [],
-    examples: ["swp init --project-ref abcdefghijklmnopqrst", "swp init --action"],
+    examples: [
+      "supabase-worker-previews init --project-ref abcdefghijklmnopqrst",
+      "supabase-worker-previews init --action",
+    ],
   },
   {
     name: "doctor",
@@ -80,7 +95,7 @@ export const COMMANDS: Command[] = [
     flags: OVERRIDES,
     env: [],
     dryRunEnv: [],
-    examples: ["swp doctor"],
+    examples: ["supabase-worker-previews doctor"],
   },
   {
     name: "shared",
@@ -94,7 +109,7 @@ export const COMMANDS: Command[] = [
     flags: [DRY_RUN, ...OVERRIDES],
     env: TOKENS,
     dryRunEnv: ["SUPABASE_ACCESS_TOKEN"],
-    examples: ["swp shared --dry-run", "swp shared"],
+    examples: ["supabase-worker-previews shared --dry-run", "supabase-worker-previews shared"],
   },
   {
     name: "up",
@@ -107,7 +122,7 @@ export const COMMANDS: Command[] = [
     flags: [...BRANCH, DRY_RUN, ...OVERRIDES],
     env: TOKENS,
     dryRunEnv: [],
-    examples: ["swp up --branch feat/notes --dry-run"],
+    examples: ["supabase-worker-previews up --branch feat/notes --dry-run"],
   },
   {
     name: "check",
@@ -125,7 +140,7 @@ export const COMMANDS: Command[] = [
     ],
     env: TOKENS,
     dryRunEnv: [],
-    examples: ["swp check --branch feat/notes --isolated"],
+    examples: ["supabase-worker-previews check --branch feat/notes --isolated"],
   },
   {
     name: "down",
@@ -136,7 +151,7 @@ export const COMMANDS: Command[] = [
     flags: [...BRANCH, DRY_RUN, ...OVERRIDES],
     env: TOKENS,
     dryRunEnv: TOKENS,
-    examples: ["swp down --branch feat/notes --dry-run"],
+    examples: ["supabase-worker-previews down --branch feat/notes --dry-run"],
   },
   {
     name: "pr",
@@ -155,7 +170,7 @@ export const COMMANDS: Command[] = [
     ],
     env: WITH_GITHUB,
     dryRunEnv: WITH_GITHUB,
-    examples: ["swp pr"],
+    examples: ["supabase-worker-previews pr"],
   },
   {
     name: "prune",
@@ -175,7 +190,7 @@ export const COMMANDS: Command[] = [
     ],
     env: WITH_GITHUB,
     dryRunEnv: WITH_GITHUB,
-    examples: ["swp prune", "swp prune --yes"],
+    examples: ["supabase-worker-previews prune", "supabase-worker-previews prune --yes"],
   },
 ];
 
@@ -211,9 +226,9 @@ export function mainHelp(s: Style = makeStyle(false)): string {
     ),
   ]);
   return [
-    `${s.bold("swp")} ${version()}: branch previews for Cloudflare Workers on Supabase branching`,
+    `${s.bold("supabase-worker-previews")} ${version()}: branch previews for Cloudflare Workers on Supabase branching`,
     "",
-    `${s.bold("Usage:")} swp <command> [flags]`,
+    `${s.bold("Usage:")} supabase-worker-previews <command> [flags]`,
     ...groups,
     "",
     s.bold("Common flags"),
@@ -228,15 +243,15 @@ export function mainHelp(s: Style = makeStyle(false)): string {
     "  npx supabase-worker-previews doctor",
     "  npx supabase-worker-previews shared --dry-run",
     "",
-    `Run ${s.cyan("swp <command> --help")} for one command. Docs: ${DOCS_URL}`,
+    `Run ${s.cyan("supabase-worker-previews <command> --help")} for one command. Docs: ${DOCS_URL}`,
   ].join("\n");
 }
 
 export function commandHelp(c: Command, s: Style = makeStyle(false)): string {
   return [
-    `${s.bold(`swp ${c.name}`)}: ${c.summary.charAt(0).toLowerCase()}${c.summary.slice(1)}`,
+    `${s.bold(`supabase-worker-previews ${c.name}`)}: ${c.summary.charAt(0).toLowerCase()}${c.summary.slice(1)}`,
     "",
-    `${s.bold("Usage:")} swp ${c.name}${c.args ? ` ${c.args}` : ""}`,
+    `${s.bold("Usage:")} supabase-worker-previews ${c.name}${c.args ? ` ${c.args}` : ""}`,
     "",
     c.details,
     "",
@@ -305,12 +320,12 @@ function unknownCommand(name: string): Invocation {
   );
   return {
     kind: "error",
-    message: `Unknown command "${name}".${guess ? ` Did you mean "swp ${guess}"?` : ""}\nRun swp --help to see every command.`,
+    message: `Unknown command "${name}".${guess ? ` Did you mean "supabase-worker-previews ${guess}"?` : ""}\nRun supabase-worker-previews --help to see every command.`,
   };
 }
 
 function usageError(message: string, name: CommandName): Invocation {
-  return { kind: "error", message: `${message}\nRun swp ${name} --help for its usage.` };
+  return { kind: "error", message: `${message}\nRun supabase-worker-previews ${name} --help for its usage.` };
 }
 
 const ENV_SOURCES: Record<string, string> = {
@@ -333,12 +348,15 @@ export function missingEnvMessage(
   return [
     `${name}${dryRun ? " --dry-run" : ""} needs ${missing.length === 1 ? "this variable" : "these variables"}, not set:`,
     ...missing.map((v) => `  ${v.padEnd(width)}  ${ENV_SOURCES[v]}`),
-    `Put ${missing.length === 1 ? "it" : "them"} in .env.swp (git-ignore it) or the environment. Scopes: ${TOKENS_URL}`,
+    `Put ${missing.length === 1 ? "it" : "them"} in .env.supabase-worker-previews (git-ignore it) or the environment. Scopes: ${TOKENS_URL}`,
   ].join("\n");
 }
 
 /** One line for the user: the message, and for a network failure the host and the system error. */
-export function formatError(err: unknown, debug = !!process.env.SWP_DEBUG): string {
+export function formatError(
+  err: unknown,
+  debug = !!(process.env.SUPABASE_WORKER_PREVIEWS_DEBUG || process.env.SWP_DEBUG),
+): string {
   if (!(err instanceof Error)) return String(err);
   if (debug && err.stack) return err.stack;
   const cause = err.cause as { code?: string; hostname?: string; message?: string } | undefined;

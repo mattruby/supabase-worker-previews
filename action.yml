@@ -7,13 +7,13 @@ branding:
 
 inputs:
   command:
-    description: The swp command to run.
+    description: The supabase-worker-previews command to run.
     default: pr
   args:
-    description: Extra arguments for swp, such as --dry-run.
+    description: Extra arguments for the command, such as --dry-run.
     default: ""
   working-directory:
-    description: Directory holding swp.config.json and the wrangler config.
+    description: Directory holding supabase-worker-previews.json and the wrangler config.
     default: "."
   version:
     description: supabase-worker-previews version to run when the project does not install it.
@@ -58,11 +58,11 @@ runs:
         flags=()
         if [ "$SWP_COMMAND" = "pr" ] && [ "$SWP_COMMENT" = "false" ]; then flags+=(--no-comment); fi
         if [ "$SWP_COMMAND" = "pr" ] && [ "$SWP_DEPLOYMENTS" = "false" ]; then flags+=(--no-deployments); fi
-        if npx --no-install swp help >/dev/null 2>&1; then
-          swp=(npx --no-install swp)
+        if npx --no-install supabase-worker-previews help >/dev/null 2>&1; then
+          cli=(npx --no-install supabase-worker-previews)
         else
-          echo "swp is not installed in $PWD; running supabase-worker-previews@$SWP_VERSION"
-          swp=(npx --yes "supabase-worker-previews@$SWP_VERSION")
+          echo "supabase-worker-previews is not installed in $PWD; running supabase-worker-previews@$SWP_VERSION"
+          cli=(npx --yes "supabase-worker-previews@$SWP_VERSION")
         fi
         # SWP_ARGS is split on spaces on purpose.
-        "${swp[@]}" "$SWP_COMMAND" $SWP_ARGS ${flags[@]+"${flags[@]}"}
+        "${cli[@]}" "$SWP_COMMAND" $SWP_ARGS ${flags[@]+"${flags[@]}"}

@@ -2,7 +2,16 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { CloudflareApi } from "./cloudflare.js";
-import { loadConfig, migrationFiles, type Config } from "./config.js";
+import {
+  CONFIG_FILE,
+  configFileIn,
+  DOTENV_FILE,
+  LEGACY_CONFIG_FILE,
+  LEGACY_DOTENV_FILE,
+  loadConfig,
+  migrationFiles,
+  type Config,
+} from "./config.js";
 import { check, down, shared, up, type Deps } from "./commands/branches.js";
 import { doctor, formatReport } from "./commands/doctor.js";
 import { init } from "./commands/init.js";
@@ -66,13 +75,15 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   if (invocation.kind === "error") {
-    console.error(`${errStyle.red("swp:")} ${invocation.message}`);
+    console.error(`${errStyle.red("supabase-worker-previews:")} ${invocation.message}`);
     return 2;
   }
   const { command, flags } = invocation;
   const dryRun = flags["dry-run"] === true;
 
-  const envFile = str(flags.dotenv) ?? (existsSync(".env.swp") ? ".env.swp" : undefined);
+  const envFile = str(flags.dotenv) ?? [DOTENV_FILE, LEGACY_DOTENV_FILE].find((f) => existsSync(f));
+  if (envFile === LEGACY_DOTENV_FILE)
+    console.error(errStyle.yellow(`Loading ${LEGACY_DOTENV_FILE}; rename it to ${DOTENV_FILE}.`));
   if (envFile) {
     if (!existsSync(envFile)) throw new Error(`--dotenv ${envFile}: no such file`);
     process.loadEnvFile(envFile);
@@ -105,6 +116,8 @@ async function main(argv: string[]): Promise<number> {
     return report.pass ? 0 : 1;
   }
 
+  if (configFileIn() === LEGACY_CONFIG_FILE)
+    console.error(errStyle.yellow(`Reading ${LEGACY_CONFIG_FILE}; rename it to ${CONFIG_FILE}.`));
   const config = loadConfig(overrides);
   const prNum = prNumber(flags.pr);
   const event = command === "pr" ? readEvent() : undefined;
@@ -162,7 +175,7 @@ async function main(argv: string[]): Promise<number> {
 main(process.argv.slice(2)).then(
   (code) => process.exit(code),
   (err: unknown) => {
-    console.error(`${errStyle.red("swp:")} ${formatError(err)}`);
+    console.error(`${errStyle.red("supabase-worker-previews:")} ${formatError(err)}`);
     process.exit(1);
   },
 );

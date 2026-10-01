@@ -194,7 +194,7 @@ export function explainCreateBranchError(ref: string, name: string, err: Supabas
     gate?.feature === "branching_limit" ||
     /branch(es|ing)?[ _]limit|(maximum|max|too many)[\w ]* branches/i.test(err.body)
   )
-    advice = `Project ${ref} has reached its branch limit. Delete branches you no longer need (\`swp prune\` lists leftovers) or raise the limit${upgrade}.`;
+    advice = `Project ${ref} has reached its branch limit. Delete branches you no longer need (\`supabase-worker-previews prune\` lists leftovers) or raise the limit${upgrade}.`;
   else if (gate)
     advice = `The organization's plan does not include ${gate.feature ?? "this feature"}${upgrade}.`;
   else if (err.status === 401) advice = "The Supabase access token is invalid or expired.";

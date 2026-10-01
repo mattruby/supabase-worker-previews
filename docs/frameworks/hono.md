@@ -65,7 +65,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 
 ## Make the HTML reach the Worker
 
-The Cloudflare template sets `assets.not_found_handling` to `single-page-application`, and its guide notes that "routes that are handled by your SPA do not go to the Worker". The injection happens in the Worker, so `index.html` served straight from assets gets no config, and the browser silently falls back to build-time values. `swp doctor` warns when the assets directory holds HTML and `run_worker_first` is unset (it checks the top level of the directory only). Set [`run_worker_first`](https://developers.cloudflare.com/workers/static-assets/binding/#run_worker_first) so HTML routes go through the Worker, for example:
+The Cloudflare template sets `assets.not_found_handling` to `single-page-application`, and its guide notes that "routes that are handled by your SPA do not go to the Worker". The injection happens in the Worker, so `index.html` served straight from assets gets no config, and the browser silently falls back to build-time values. `supabase-worker-previews doctor` warns when the assets directory holds HTML and `run_worker_first` is unset (it checks the top level of the directory only). Set [`run_worker_first`](https://developers.cloudflare.com/workers/static-assets/binding/#run_worker_first) so HTML routes go through the Worker, for example:
 
 ```jsonc
 "assets": {

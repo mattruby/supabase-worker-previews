@@ -37,18 +37,18 @@ flowchart LR
   preview -- "previews.vars" --> shareddb[("Shared Preview database<br/>persistent branch 'preview'")]
   pr["PR changes supabase/<br/>or has label isolated-db"] --> integ["Supabase GitHub integration"]
   integ --> prdb[("The PR's own database")]
-  pr --> action["GitHub Actions: swp pr"]
+  pr --> action["GitHub Actions: pr command"]
   action -- "SUPABASE_OVERRIDE secret" --> preview
   preview -. "PRs with their own database" .-> prdb
-  action -- "swp check reads<br/>/.well-known/supabase-preview" --> preview
+  action -- "check reads<br/>/.well-known/supabase-preview" --> preview
 ```
 
-`swp` adds no infrastructure. Cloudflare builds the Previews and Supabase makes and migrates the databases. `swp` connects the two:
+It adds no infrastructure. Cloudflare builds the Previews and Supabase makes and migrates the databases; this package connects the two:
 
 1. **Every Preview starts on the shared Preview database**, a persistent Supabase branch that tracks your trunk. Its public URL and key live in your wrangler config's `previews.vars`.
-2. **A PR that changes the schema gets its own database.** The Supabase GitHub integration creates it; `swp pr` points the PR's Preview at it with one secret, `SUPABASE_OVERRIDE`.
+2. **A PR that changes the schema gets its own database.** The Supabase GitHub integration creates it; the `pr` command points the PR's Preview at it with one secret, `SUPABASE_OVERRIDE`.
 3. **The Worker reads its Supabase settings per request.** `withSupabasePreviews()` applies the override and injects the public config into each HTML page, so no build-time `VITE_SUPABASE_URL` pins a database into the bundle.
-4. **`swp check` asks the Preview which database it serves** and fails the PR unless it is the right one.
+4. **`check` asks the Preview which database it serves** and fails the PR unless it is the right one.
 
 New to Worker Previews or Supabase branching? [Concepts](docs/concepts.md) explains both in five minutes.
 
@@ -61,7 +61,7 @@ npm install --save-dev supabase-worker-previews
 npx supabase-worker-previews init --project-ref <production project ref>
 ```
 
-`init` writes `swp.config.json`, a grants migration and the PR workflow, and prints the rest. Then:
+`init` writes `supabase-worker-previews.json`, a grants migration and the PR workflow, and prints the rest. Then:
 
 1. Connect the Supabase GitHub integration (automatic branching on, deploy to production off).
 2. Add a `previews` block to your wrangler config.
@@ -83,43 +83,43 @@ The **[full quickstart](docs/quickstart.md)** walks through every step with the 
 
 ## Commands
 
-| Group          | Command      | Does                                                                                 |
-| -------------- | ------------ | ------------------------------------------------------------------------------------ |
-| **Set up**     | `swp init`   | Scaffold `swp.config.json`, the grants migration and the workflow (never overwrites) |
-|                | `swp doctor` | Check the whole setup, offline and (with a token) against Supabase                   |
-|                | `swp shared` | Create or repair the shared Preview database; prints its `previews.vars`             |
-| **Per branch** | `swp up`     | Give a branch's Preview its own database                                             |
-|                | `swp check`  | Fail unless the Preview serves the right database                                    |
-|                | `swp down`   | Delete a branch's Preview and its own database                                       |
-| **In CI**      | `swp pr`     | All of the above for a `pull_request` workflow, plus the PR comment and deployment   |
-|                | `swp prune`  | List leftovers of deleted branches and closed PRs; delete them with `--yes`          |
+Run each one as `npx supabase-worker-previews <command>`, or from an npm script.
 
-`swp` is the short name once the package is installed; the full name `supabase-worker-previews` runs the same CLI. With `npx`, always use the full name: `npx swp` on a machine without this package installed downloads [an unrelated npm package named `swp`](https://www.npmjs.com/package/swp) that deletes dependency and build folders.
+| Group          | Command  | Does                                                                                               |
+| -------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| **Set up**     | `init`   | Scaffold `supabase-worker-previews.json`, the grants migration and the workflow (never overwrites) |
+|                | `doctor` | Check the whole setup, offline and (with a token) against Supabase                                 |
+|                | `shared` | Create or repair the shared Preview database; prints its `previews.vars`                           |
+| **Per branch** | `up`     | Give a branch's Preview its own database                                                           |
+|                | `check`  | Fail unless the Preview serves the right database                                                  |
+|                | `down`   | Delete a branch's Preview and its own database                                                     |
+| **In CI**      | `pr`     | All of the above for a `pull_request` workflow, plus the PR comment and deployment                 |
+|                | `prune`  | List leftovers of deleted branches and closed PRs; delete them with `--yes`                        |
 
-`swp <command> --help` shows one command's flags and examples, and `swp --version` prints the version. Flags, environment variables, every `swp.config.json` field and the GitHub Action inputs are in the [configuration reference](docs/configuration.md).
+`<command> --help` shows one command's flags and examples, and `--version` prints the version. Flags, environment variables, every `supabase-worker-previews.json` field and the GitHub Action inputs are in the [configuration reference](docs/configuration.md).
 
 ## Safety
 
-- `swp` never writes to, repoints or deletes the production project, and never deletes a persistent branch.
-- `swp check` fails the first time a Preview serves production, with no retry.
-- `swp doctor` fails if `previews.vars` names production or holds a secret.
-- `swp prune` only lists until you pass `--yes`, and every command that changes something takes `--dry-run`.
+- It never writes to, repoints or deletes the production project, and never deletes a persistent branch.
+- `check` fails the first time a Preview serves production, with no retry.
+- `doctor` fails if `previews.vars` names production or holds a secret.
+- `prune` only lists until you pass `--yes`, and every command that changes something takes `--dry-run`.
 
-[Security](docs/security.md) covers what `swp` can touch and what each token can reach.
+[Security](docs/security.md) covers what the CLI can touch and what each token can reach.
 
 ## Docs
 
-| Page                                       | For                                                                |
-| ------------------------------------------ | ------------------------------------------------------------------ |
-| [Concepts](docs/concepts.md)               | Worker Previews, Supabase branches, and how `swp` joins them       |
-| [Quickstart](docs/quickstart.md)           | From an existing Worker to the first working PR Preview            |
-| [Frameworks](docs/README.md#frameworks)    | TanStack Start, Hono, React Router v7, Astro                       |
-| [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes and fixes                                         |
-| [How it works](docs/how-it-works.md)       | Every moving part and why it is built that way                     |
-| [Configuration](docs/configuration.md)     | Commands, flags, `swp.config.json`, the GitHub Action, the runtime |
-| [Tokens](docs/tokens.md)                   | Least-privilege Cloudflare, Supabase and GitHub credentials        |
-| [Security](docs/security.md)               | What `swp` can touch, what is public, what is secret               |
-| [Compared with Vercel](docs/vs-vercel.md)  | When Vercel and its Supabase integration are the better fit        |
+| Page                                       | For                                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| [Concepts](docs/concepts.md)               | Worker Previews, Supabase branches, and how this package joins them              |
+| [Quickstart](docs/quickstart.md)           | From an existing Worker to the first working PR Preview                          |
+| [Frameworks](docs/README.md#frameworks)    | TanStack Start, Hono, React Router v7, Astro                                     |
+| [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes and fixes                                                       |
+| [How it works](docs/how-it-works.md)       | Every moving part and why it is built that way                                   |
+| [Configuration](docs/configuration.md)     | Commands, flags, `supabase-worker-previews.json`, the GitHub Action, the runtime |
+| [Tokens](docs/tokens.md)                   | Least-privilege Cloudflare, Supabase and GitHub credentials                      |
+| [Security](docs/security.md)               | What the CLI can touch, what is public, what is secret                           |
+| [Compared with Vercel](docs/vs-vercel.md)  | When Vercel and its Supabase integration are the better fit                      |
 
 The full index is [docs/README.md](docs/README.md).
 

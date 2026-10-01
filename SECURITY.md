@@ -17,7 +17,7 @@ You should get an acknowledgement within a week. Once a fix is released, the adv
 This package handles Supabase and Cloudflare credentials and decides which database a Preview serves, so these are especially relevant:
 
 - a Preview, or its injected browser config, exposing production database credentials or a service role key;
-- `swp` leaking secrets into logs, workflow output or files it writes;
-- `swp check` passing while a Preview serves the production database.
+- `supabase-worker-previews` leaking secrets into logs, workflow output or files it writes;
+- `supabase-worker-previews check` passing while a Preview serves the production database.
 
 Vulnerabilities in Supabase, Cloudflare or wrangler themselves belong with those vendors.

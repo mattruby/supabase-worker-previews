@@ -34,7 +34,6 @@
     "node": ">=22.0.0"
   },
   "bin": {
-    "swp": "dist/cli.js",
     "supabase-worker-previews": "dist/cli.js"
   },
   "main": "./dist/runtime.js",

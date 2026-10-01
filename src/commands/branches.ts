@@ -36,6 +36,17 @@ export function previewKey(gitBranch: string, config: Config, pr?: number): stri
   return `pr-${pr}`;
 }
 
+/** A branch `swp` may delete: never production, the shared database, the trunk's or a persistent one. */
+export function isDisposable(branch: Branch, config: Config): boolean {
+  return (
+    !branch.is_default &&
+    !branch.persistent &&
+    branch.project_ref !== config.supabaseProjectRef &&
+    branch.name !== config.sharedBranch &&
+    branch.git_branch !== config.trunk
+  );
+}
+
 /** Never repoint, write to or delete the production project through a branch record. */
 export function assertIsolated(branch: Branch, parent: string): void {
   if (branch.is_default || branch.project_ref === parent) {
@@ -158,6 +169,33 @@ export async function up(gitBranch: string, deps: Deps, pr?: number): Promise<st
   });
   runner.log(`Done: ${url} now runs on ${ref}`);
   return ref;
+}
+
+/**
+ * Puts a Preview back on the shared database once its PR no longer needs its
+ * own: drops the override, then deletes the branch `up` made for it. The
+ * integration only makes branches for PRs that change supabase/, which never
+ * get here.
+ */
+export async function release(gitBranch: string, deps: Deps, pr?: number): Promise<void> {
+  const { config, runner } = deps;
+  const preview = await deps.cloudflare.findPreview(previewKey(gitBranch, config, pr));
+  if (preview && runner.dryRun) runner.log(`  remove ${OVERRIDE_SECRET} from Preview ${preview.name} if set`);
+  else if (preview && deps.cloudflare.listPreviewSecrets(preview.name).includes(OVERRIDE_SECRET)) {
+    deps.cloudflare.deletePreviewSecret(preview.name, OVERRIDE_SECRET);
+    runner.log(
+      `  removed ${OVERRIDE_SECRET} from Preview ${preview.name}; it serves ${config.sharedBranch} again`,
+    );
+  }
+  const branch = await branchFor(gitBranch, deps);
+  if (!branch || !isDisposable(branch, config)) return;
+  if (runner.dryRun) {
+    runner.log(`  DELETE Supabase branch ${branch.name} (${branch.project_ref})`);
+    return;
+  }
+  assertIsolated(branch, config.supabaseProjectRef);
+  await deps.supabase.deleteBranch(branch.project_ref);
+  runner.log(`  Supabase branch ${branch.name} deleted; ${gitBranch} no longer needs its own database`);
 }
 
 /** Which database a deployed Preview serves, from the identity route or, failing that, its HTML. */

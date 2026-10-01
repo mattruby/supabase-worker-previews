@@ -86,6 +86,21 @@ export class CloudflareApi {
     this.wrangler(["preview", "secret", "bulk", "--name", preview], { input: JSON.stringify(secrets) });
   }
 
+  listPreviewSecrets(preview: string): string[] {
+    const out = this.wrangler(["preview", "secret", "list", "--name", preview, "--json"], {
+      captureStderr: true,
+    });
+    const start = out.search(/^\[/m);
+    return start === -1 ? [] : (JSON.parse(out.slice(start)) as { name: string }[]).map((s) => s.name);
+  }
+
+  /** Creates a new deployment of the Preview, like any secret write. */
+  deletePreviewSecret(preview: string, key: string): void {
+    this.wrangler(["preview", "secret", "delete", key, "--name", preview, "--skip-confirmation"], {
+      captureStderr: true,
+    });
+  }
+
   /** Merges: keys absent from `secrets` stay. Only Previews created afterwards copy it. */
   putBaseSecrets(secrets: Record<string, string>): void {
     if (this.runner.dryRun) {

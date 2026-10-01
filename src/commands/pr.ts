@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { Config } from "../config.js";
-import { check, down, up, type Deps } from "./branches.js";
+import { check, down, release, up, type Deps } from "./branches.js";
 
 export type PullRequestEvent = {
   action: string;
@@ -50,5 +50,6 @@ export async function pr(event: PullRequestEvent, deps: Deps & { githubToken: st
     `PR #${event.number} (${branch}): ${isolated ? "its own database" : `the shared "${deps.config.sharedBranch}" database`}`,
   );
   if (isolated) await up(branch, deps, event.number);
+  else await release(branch, deps, event.number);
   await check(branch, isolated, deps, event.number);
 }

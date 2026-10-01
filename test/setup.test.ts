@@ -9,7 +9,7 @@ import { init, timestampBefore } from "../src/commands/init.js";
 import { annotation, needsIsolatedDb, skipReason, type PullRequestEvent } from "../src/commands/pr.js";
 import { parseJsonc } from "../src/jsonc.js";
 import { previewName } from "../src/preview-name.js";
-import { parseArgs, usageExitCode } from "../src/run.js";
+import { resolveInvocation } from "../src/usage.js";
 
 const PARENT = "parentrefparentref00";
 const GRANTS = readFileSync(join(import.meta.dirname, "..", "templates", "default-privileges.sql"), "utf8");
@@ -61,8 +61,29 @@ describe("loadConfig", () => {
     });
   });
 
-  it("requires the production project", () => {
-    expect(() => loadConfig({}, project({ "wrangler.json": wrangler(null) }))).toThrow(/supabaseProjectRef/);
+  it("requires the production project, and says to run init when there is no config", () => {
+    expect(() => loadConfig({}, project({ "wrangler.json": wrangler(null) }))).toThrow(
+      /No swp.config.json in this directory. Run `swp init` first, or pass --project-ref/,
+    );
+    const dir = project({ "wrangler.json": wrangler(null), "swp.config.json": "{}" });
+    expect(() => loadConfig({}, dir)).toThrow(/Set "supabaseProjectRef"/);
+  });
+
+  it("refuses the placeholder init writes, an unknown key and unparseable JSON, naming the file", () => {
+    const config = (text: string) => () =>
+      loadConfig({}, project({ "wrangler.json": wrangler(null), "swp.config.json": text }));
+    expect(config('{ "supabaseProjectRef": "<production project ref>" }')).toThrow(/is still <production/);
+    expect(config(`{ "supabaseProjectRef": "${PARENT}", "trunck": "main" }`)).toThrow(
+      /Unknown key "trunck" in swp.config.json. Did you mean "trunk"\?/,
+    );
+    expect(config("{ ")).toThrow(/^Cannot parse swp.config.json: /);
+  });
+
+  it("says where to run swp when there is no wrangler config", () => {
+    const dir = project({ "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT }) });
+    expect(() => loadConfig({}, dir)).toThrow(
+      /No wrangler.jsonc, wrangler.json, wrangler.toml in this directory/,
+    );
   });
 
   it("rejects an unknown choice", () => {
@@ -155,6 +176,7 @@ describe("doctor", () => {
     expect(out).toMatch(/warn: "ratelimits" is bound at the top level/);
     expect(out).toMatch(/error: the first migration/);
     expect(out).toMatch(/warn: supabase\/config.toml/);
+    expect(checkLocal(config, dir).filter((f) => f.level !== "ok" && !f.fix)).toEqual([]);
   });
 
   it("passes a complete wrangler.toml setup", () => {
@@ -293,6 +315,49 @@ describe("init", () => {
     );
   });
 
+  it("writes nothing in a dry run", () => {
+    const dir = project({ "wrangler.jsonc": wrangler(null) });
+    const lines: string[] = [];
+    init({ supabaseProjectRef: PARENT, dryRun: true, log: (l) => lines.push(l) }, dir);
+    expect(readdirSync(dir)).toEqual(["wrangler.jsonc"]);
+    expect(lines.join("\n")).toMatch(/Dry run: nothing is written[\s\S]*\+ swp.config.json/);
+  });
+
+  it("writes the published-action workflow with --action", () => {
+    const dir = project({ "wrangler.jsonc": wrangler(null) });
+    init({ supabaseProjectRef: PARENT, action: true, log: () => {} }, dir);
+    expect(readFileSync(join(dir, ".github/workflows/supabase-previews.yml"), "utf8")).toContain(
+      "uses: mattruby/supabase-worker-previews@v0",
+    );
+  });
+
+  it("ends with next steps that point at the quickstart, shared, doctor and the wrapper", () => {
+    const lines: string[] = [];
+    init({ log: (l) => lines.push(l) }, project({ "wrangler.jsonc": wrangler(null) }));
+    const text = lines.join("\n");
+    expect(text).toContain("docs/quickstart.md");
+    expect(text).toContain("npx swp shared");
+    expect(text).toContain("npx swp doctor");
+    expect(text).toContain("withSupabasePreviews(app)");
+    expect(text).toContain("swp init --action");
+    expect(text).toMatch(/1\. Set "supabaseProjectRef"/);
+    expect(text).toMatch(/Add a "previews" block to wrangler.jsonc/);
+
+    const ready: string[] = [];
+    init(
+      { supabaseProjectRef: PARENT, log: (l) => ready.push(l) },
+      project({ "wrangler.jsonc": wrangler({ vars: {} }) }),
+    );
+    expect(ready.join("\n")).not.toMatch(/Set "supabaseProjectRef"|Add a "previews" block/);
+  });
+
+  it("says what is wrong with the wrangler config", () => {
+    expect(() => init({ log: () => {} }, project({}))).toThrow(/No wrangler.jsonc, .* in this directory/);
+    expect(() => init({ log: () => {} }, project({ "wrangler.json": "{}" }))).toThrow(
+      /wrangler.json has no "name"/,
+    );
+  });
+
   it("is idempotent", () => {
     const dir = project({ "wrangler.jsonc": wrangler(null) });
     init({ supabaseProjectRef: PARENT, log: () => {} }, dir);
@@ -378,17 +443,18 @@ describe("skipReason", () => {
   });
 });
 
-describe("usageExitCode", () => {
-  const code = (...argv: string[]) => {
-    const { positional, flags } = parseArgs(argv);
-    return usageExitCode(positional, flags);
+describe("resolveInvocation", () => {
+  const kind = (...argv: string[]) => {
+    const r = resolveInvocation(argv);
+    return r.kind === "help" ? `help ${r.code}` : r.kind;
   };
 
   it("exits 0 when asked for help and 2 with no arguments", () => {
-    expect(code("--help")).toBe(0);
-    expect(code("help")).toBe(0);
-    expect(code("doctor", "--help")).toBe(0);
-    expect(code()).toBe(2);
-    expect(code("doctor")).toBeUndefined();
+    expect(kind("--help")).toBe("help 0");
+    expect(kind("-h")).toBe("help 0");
+    expect(kind("help")).toBe("help 0");
+    expect(kind("doctor", "--help")).toBe("help 0");
+    expect(kind()).toBe("help 2");
+    expect(kind("doctor")).toBe("run");
   });
 });

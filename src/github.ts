@@ -1,3 +1,5 @@
+import { apiErrorMessage } from "./http.js";
+
 export type DeploymentState = "in_progress" | "success" | "failure" | "error" | "inactive";
 type Comment = { id: number; body?: string };
 export type Deployment = { id: number; payload?: unknown };
@@ -21,7 +23,10 @@ export class GitHubApi {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`GitHub API ${method} ${path}: ${res.status} ${await res.text()}`);
+    if (!res.ok)
+      throw new Error(
+        apiErrorMessage(`GitHub API ${method} ${path}`, res.status, await res.text(), "GITHUB_TOKEN"),
+      );
     return (await res.json()) as T;
   }
 

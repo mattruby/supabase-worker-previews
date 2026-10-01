@@ -80,6 +80,16 @@ try {
   check(help.status === 0 && help.stdout.includes("swp init"), "swp --help prints the usage and exits 0");
   const helpCommand = run(swp, ["help"], consumer);
   check(helpCommand.status === 0 && helpCommand.stdout.includes("swp init"), "swp help exits 0");
+  const version = run(swp, ["--version"], consumer);
+  check(
+    version.status === 0 && version.stdout.trim() === packed.version,
+    `swp --version prints ${packed.version}${version.status ? `\n${version.stderr}` : ""}`,
+  );
+  const unknown = run(swp, ["doctr"], consumer);
+  check(
+    unknown.status === 2 && unknown.stderr.includes('"swp doctor"'),
+    "swp doctr suggests swp doctor and exits 2",
+  );
 
   const app = join(tmp, "app");
   mkdirSync(app);

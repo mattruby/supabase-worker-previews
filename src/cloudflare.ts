@@ -1,3 +1,4 @@
+import { apiErrorMessage } from "./http.js";
 import { previewName } from "./preview-name.js";
 import type { Runner } from "./run.js";
 
@@ -47,10 +48,11 @@ export class CloudflareApi {
         headers: { authorization: `Bearer ${this.auth.apiToken}` },
       },
     );
-    const json = (await res.json()) as { result?: T; errors?: { message: string }[] };
-    if (!res.ok || json.result === undefined)
+    const text = await res.text();
+    const json = parseJson<{ result?: T }>(text);
+    if (!res.ok || json?.result === undefined)
       throw new Error(
-        `Cloudflare API ${path}: ${res.status} ${json.errors?.map((e) => e.message).join("; ") ?? ""}`,
+        apiErrorMessage(`Cloudflare API GET ${path}`, res.status, text, "CLOUDFLARE_API_TOKEN"),
       );
     return json.result;
   }
@@ -114,5 +116,13 @@ export class CloudflareApi {
 
   deletePreview(preview: string): void {
     this.wrangler(["preview", "delete", "--name", preview, "--skip-confirmation"], { captureStderr: true });
+  }
+}
+
+function parseJson<T>(text: string): T | null {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
   }
 }

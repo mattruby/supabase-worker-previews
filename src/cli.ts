@@ -4,39 +4,43 @@ import { existsSync } from "node:fs";
 import { CloudflareApi } from "./cloudflare.js";
 import { loadConfig, migrationFiles, type Config } from "./config.js";
 import { check, down, shared, up, type Deps } from "./commands/branches.js";
-import { checkLocal, checkRemote, type Finding } from "./commands/doctor.js";
+import { doctor, formatReport } from "./commands/doctor.js";
 import { init } from "./commands/init.js";
 import { prune } from "./commands/prune.js";
 import { annotation, pr, readEvent, skipReason } from "./commands/pr.js";
-import { makeRunner, parseArgs, sleep, usageExitCode } from "./run.js";
+import { makeRunner, sleep } from "./run.js";
+import { err as errStyle, out } from "./style.js";
 import { SupabaseApi } from "./supabase.js";
+import { formatError, missingEnvMessage, resolveInvocation, version } from "./usage.js";
 
-const USAGE = `swp: branch previews for Cloudflare Workers on Supabase branching
-
-  swp init [--project-ref <ref>] [--trunk <branch>]   scaffold config, grants migration, workflow
-  swp doctor                                          check the setup, offline and (with tokens) online
-  swp shared                                          create or repair the shared Preview database
-  swp up    [--branch <b>] [--pr <n>]                 give a branch's Preview its own database
-  swp check [--branch <b>] [--pr <n>] [--isolated]    fail unless the Preview serves the right database
-  swp down  [--branch <b>] [--pr <n>]                 delete the Preview and its own database
-  swp pr                                              all of the above for a pull_request workflow
-  swp prune [--repo <owner/name>] [--yes]             list (or delete) leftovers of deleted branches and closed PRs
-
-Flags: --dry-run, --env-file <path>, --worker <name>, --project-ref <ref>, --trunk <branch>
-       --no-comment, --no-deployments   (pr: skip the PR comment or the GitHub deployment)
-Env:   SUPABASE_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (and GITHUB_TOKEN for pr and prune)`;
+function git(args: string[]): string | undefined {
+  try {
+    return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return undefined;
+  }
+}
 
 function currentBranch(flag: string | true | undefined): string {
   if (typeof flag === "string") return flag;
   if (process.env.WORKERS_CI_BRANCH) return process.env.WORKERS_CI_BRANCH;
   if (process.env.GITHUB_HEAD_REF) return process.env.GITHUB_HEAD_REF;
-  return execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8" }).trim();
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+  if (!branch)
+    throw new Error("Cannot tell the git branch here (not a git checkout?). Pass --branch <name>.");
+  if (branch === "HEAD")
+    throw new Error("HEAD is detached, so there is no branch to use. Pass --branch <name>.");
+  return branch;
 }
 
-function env(name: string, dryRun = false): string {
-  const value = process.env[name];
-  if (!value && !dryRun) throw new Error(`Missing ${name} in the environment`);
-  return value ?? `<${name}>`;
+/** `owner/name` from a github.com origin remote, over https or ssh. */
+function originRepo(): string | undefined {
+  const url = git(["remote", "get-url", "origin"]);
+  return url?.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?\/?$/)?.[1];
+}
+
+function env(name: string): string {
+  return process.env[name] || `<${name}>`;
 }
 
 function str(v: string | true | undefined): string | undefined {
@@ -46,64 +50,85 @@ function str(v: string | true | undefined): string | undefined {
 function prNumber(flag: string | true | undefined): number | undefined {
   if (flag === undefined) return undefined;
   const n = Number(flag);
-  if (!Number.isInteger(n) || n <= 0) throw new Error("--pr takes a pull request number");
+  if (!Number.isInteger(n) || n <= 0)
+    throw new Error(`--pr takes a pull request number, not "${String(flag)}"`);
   return n;
 }
 
-function report(findings: Finding[]): boolean {
-  const mark = { ok: "✓", warn: "!", error: "✗" } as const;
-  for (const f of findings) console.log(`${mark[f.level]} ${f.message}`);
-  return !findings.some((f) => f.level === "error");
-}
-
 async function main(argv: string[]): Promise<number> {
-  const { positional, flags } = parseArgs(argv);
-  const command = positional[0];
-  const usageCode = usageExitCode(positional, flags);
-  if (usageCode !== undefined) {
-    console.log(USAGE);
-    return usageCode;
+  const invocation = resolveInvocation(argv, out);
+  if (invocation.kind === "help") {
+    console.log(invocation.text);
+    return invocation.code;
   }
+  if (invocation.kind === "version") {
+    console.log(version());
+    return 0;
+  }
+  if (invocation.kind === "error") {
+    console.error(`${errStyle.red("swp:")} ${invocation.message}`);
+    return 2;
+  }
+  const { command, flags } = invocation;
+  const dryRun = flags["dry-run"] === true;
+
   const envFile = str(flags["env-file"]) ?? (existsSync(".env.swp") ? ".env.swp" : undefined);
-  if (envFile) process.loadEnvFile(envFile);
+  if (envFile) {
+    if (!existsSync(envFile)) throw new Error(`--env-file ${envFile}: no such file`);
+    process.loadEnvFile(envFile);
+  }
 
   if (command === "init") {
-    init({ supabaseProjectRef: str(flags["project-ref"]), trunk: str(flags.trunk) });
+    init({
+      supabaseProjectRef: str(flags["project-ref"]),
+      trunk: str(flags.trunk),
+      action: flags.action === true,
+      dryRun,
+      log: (line) =>
+        console.log(line.startsWith("+ ") ? out.green(line) : line.startsWith("- ") ? out.dim(line) : line),
+    });
     return 0;
   }
 
-  const config: Config = loadConfig({
+  const overrides: Partial<Config> = {
     worker: str(flags.worker),
     supabaseProjectRef: str(flags["project-ref"]),
     trunk: str(flags.trunk),
     prComment: flags["no-comment"] ? false : undefined,
     githubDeployments: flags["no-deployments"] ? false : undefined,
-  });
+  };
 
   if (command === "doctor") {
-    let pass = report(checkLocal(config));
-    if (process.env.SUPABASE_ACCESS_TOKEN)
-      pass = report(await checkRemote(config, new SupabaseApi(process.env.SUPABASE_ACCESS_TOKEN))) && pass;
-    else console.log("! SUPABASE_ACCESS_TOKEN not set; skipped the online checks");
-    return pass ? 0 : 1;
+    const token = process.env.SUPABASE_ACCESS_TOKEN;
+    const report = formatReport(await doctor(overrides, token ? new SupabaseApi(token) : undefined), out);
+    console.log(report.text);
+    return report.pass ? 0 : 1;
   }
 
+  const config = loadConfig(overrides);
+  const prNum = prNumber(flags.pr);
   const event = command === "pr" ? readEvent() : undefined;
   const skip = event && skipReason(event);
   if (skip) {
     console.log(annotation(skip));
     return skip.level === "error" ? 1 : 0;
   }
+  const repo =
+    command === "prune" ? (str(flags.repo) ?? process.env.GITHUB_REPOSITORY ?? originRepo()) : undefined;
+  if (command === "prune" && !repo)
+    throw new Error("Cannot tell the GitHub repo: pass --repo <owner/name>, or set GITHUB_REPOSITORY.");
+  const missing = missingEnvMessage(command, dryRun);
+  if (missing) throw new Error(missing);
 
-  const dryRun = flags["dry-run"] === true;
-  const runner = makeRunner(dryRun);
+  const runner = makeRunner(dryRun, (line) => console.log(line.startsWith("  $ ") ? out.dim(line) : line));
+  if (dryRun) runner.log(out.dim("Dry run: reads only, changes nothing."));
   const deps: Deps = {
     config,
     runner,
     supabase: new SupabaseApi(env("SUPABASE_ACCESS_TOKEN")),
     cloudflare: new CloudflareApi(
       runner,
-      { apiToken: env("CLOUDFLARE_API_TOKEN", dryRun), accountId: env("CLOUDFLARE_ACCOUNT_ID", dryRun) },
+      { apiToken: env("CLOUDFLARE_API_TOKEN"), accountId: env("CLOUDFLARE_ACCOUNT_ID") },
       config.worker,
     ),
     migrationCount: () => migrationFiles(config).length,
@@ -114,35 +139,30 @@ async function main(argv: string[]): Promise<number> {
   switch (command) {
     case "shared":
       await shared(deps);
-      return 0;
+      break;
     case "up":
-      await up(currentBranch(flags.branch), deps, prNumber(flags.pr));
-      return 0;
+      await up(currentBranch(flags.branch), deps, prNum);
+      break;
     case "check":
-      await check(currentBranch(flags.branch), flags.isolated === true, deps, prNumber(flags.pr));
-      return 0;
+      await check(currentBranch(flags.branch), flags.isolated === true, deps, prNum);
+      break;
     case "down":
-      await down(currentBranch(flags.branch), deps, prNumber(flags.pr));
-      return 0;
+      await down(currentBranch(flags.branch), deps, prNum);
+      break;
     case "pr":
       await pr(event!, { ...deps, githubToken: env("GITHUB_TOKEN") });
-      return 0;
-    case "prune": {
-      const repo = str(flags.repo) ?? process.env.GITHUB_REPOSITORY;
-      if (!repo) throw new Error("Pass --repo <owner/name> or set GITHUB_REPOSITORY");
-      await prune({ ...deps, githubToken: env("GITHUB_TOKEN"), repo, yes: flags.yes === true });
-      return 0;
-    }
-    default:
-      console.error(`Unknown command "${command}"\n\n${USAGE}`);
-      return 2;
+      break;
+    case "prune":
+      await prune({ ...deps, githubToken: env("GITHUB_TOKEN"), repo: repo!, yes: flags.yes === true });
+      break;
   }
+  return 0;
 }
 
 main(process.argv.slice(2)).then(
   (code) => process.exit(code),
-  (err: Error) => {
-    console.error(`swp: ${err.message}`);
+  (err: unknown) => {
+    console.error(`${errStyle.red("swp:")} ${formatError(err)}`);
     process.exit(1);
   },
 );

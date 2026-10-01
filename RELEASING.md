@@ -10,6 +10,7 @@ Releases are automated with [Changesets](https://changesets.dev) and published t
    - **No changesets, and the version in `package.json` is not on npm yet** (the state right after the Version Packages PR merges): the `pack` job runs the checks and packs the tarball with no publish credentials; the `publish` job publishes that tarball with an OIDC token, then pushes the `v<version>` git tag and creates a GitHub release.
    - **Otherwise:** nothing.
 3. To release, review and merge the Version Packages pull request.
+4. Approve the `publish` job: the `npm-publish` environment requires a maintainer's approval, so nothing reaches npm without a click in the Actions run. After it finishes, npm can take 10 minutes or more to show the new version; check the version's `time` entry in the registry before assuming a publish failed.
 
 The Version Packages pull request is pushed with the workflow's `GITHUB_TOKEN`, and GitHub does not start other workflows from events that token causes, so CI does not run on it by itself. If `main` requires the CI checks, close and reopen the pull request (or push an empty commit to its branch) to start them.
 
@@ -25,7 +26,7 @@ Do these in order. Steps 1 to 3 happen on GitHub, 4 to 7 on npm.
 2. **Settings, Actions, General:**
    - Workflow permissions: leave the default "Read repository contents" (each job asks for what it needs).
    - Tick **"Allow GitHub Actions to create and approve pull requests"**. Without it the `version` job fails with `GitHub Actions is not permitted to create or approve pull requests`.
-3. **Settings, Environments, New environment** named exactly **`npm-publish`**. Optionally add yourself as a required reviewer so every publish waits for a click, and limit it to the `main` branch under "Deployment branches and tags". (GitHub creates the environment on first use if you skip this, but without any protection rules.)
+3. **Settings, Environments, New environment** named exactly **`npm-publish`**. Add yourself as a required reviewer so every publish waits for a click (this repository does), and limit it to the `main` branch under "Deployment branches and tags". (GitHub creates the environment on first use if you skip this, but without any protection rules.)
 
 Also worth turning on, though releases do not depend on them:
 

@@ -98,6 +98,7 @@ Every command takes `--dry-run`, and `--env-file <path>` (default `.env.swp` whe
 | `isolatedLabel`      | `isolated-db`   | PR label that asks for one anyway                    |
 | `checkPath`          | `/`             | Page `check` scans when the identity route is absent |
 | `workersSubdomain`   | looked up       | Your `*.workers.dev` subdomain                       |
+| `apiKeys`            | `legacy`        | API keys to prefer: `legacy` or `new` (`sb_...`)     |
 
 ## Safety
 

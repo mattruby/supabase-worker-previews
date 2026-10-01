@@ -22,6 +22,8 @@ export type Config = {
   isolatedLabel: string;
   /** Path `check` fetches when the Worker does not serve the identity route. */
   checkPath: string;
+  /** Which Supabase API keys to hand a Preview when a project has both kinds. */
+  apiKeys: "legacy" | "new";
 };
 
 export type WranglerConfig = { file: string; json: Record<string, unknown>; name?: string };
@@ -32,7 +34,10 @@ const DEFAULTS = {
   supabaseDir: "supabase",
   isolatedLabel: "isolated-db",
   checkPath: "/",
+  apiKeys: "legacy",
 };
+
+const CHOICES = { apiKeys: ["legacy", "new"] } as const;
 
 export function readWranglerConfig(cwd = process.cwd()): WranglerConfig | null {
   const file = WRANGLER_FILES.find((f) => existsSync(join(cwd, f)));
@@ -56,6 +61,11 @@ export function loadConfig(overrides: Partial<Config> = {}, cwd = process.cwd())
     throw new Error(`No worker name: set "worker" in ${CONFIG_FILE} or "name" in the wrangler config`);
   if (!merged.supabaseProjectRef)
     throw new Error(`Set "supabaseProjectRef" (the production project) in ${CONFIG_FILE}`);
+  for (const [key, allowed] of Object.entries(CHOICES)) {
+    const value = merged[key as keyof typeof CHOICES];
+    if (!(allowed as readonly string[]).includes(value))
+      throw new Error(`"${key}" in ${CONFIG_FILE} must be ${allowed.map((a) => `"${a}"`).join(" or ")}`);
+  }
   return merged as Config;
 }
 

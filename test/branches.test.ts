@@ -28,6 +28,7 @@ const config: Config = {
   supabaseDir: "supabase",
   isolatedLabel: "isolated-db",
   checkPath: "/",
+  apiKeys: "legacy",
 };
 
 const main: Branch = { id: "0", name: "main", project_ref: PARENT, is_default: true, status: "" };

@@ -12,8 +12,12 @@ export type Branch = {
 };
 export type BranchDetail = { ref: string; status: string };
 export type ProjectKeys = { publishable: string; secret: string };
-type ApiKey = { name: string; type?: string | null; api_key: string };
-
+export type KeyKind = "legacy" | "new";
+export type ApiKey = {
+  name: string;
+  type?: "legacy" | "publishable" | "secret" | null;
+  api_key?: string | null;
+};
 export class SupabaseApiError extends Error {
   constructor(
     readonly method: string,
@@ -85,15 +89,28 @@ export class SupabaseApi {
     return this.call("POST", `/projects/${ref}/database/query`, { query: sql });
   }
 
-  /** Legacy anon/service_role keys when the project has them, else the new publishable/secret pair. */
-  async keys(ref: string): Promise<ProjectKeys> {
+  /** The preferred kind of key pair when the project has it (and legacy keys are enabled), else the other. */
+  async keys(ref: string, prefer: KeyKind = "legacy"): Promise<ProjectKeys> {
     const keys = await this.call<ApiKey[]>("GET", `/projects/${ref}/api-keys?reveal=true`);
-    const byName = (n: string) => keys.find((k) => k.name === n)?.api_key;
-    const byType = (t: string) => keys.find((k) => k.type === t)?.api_key;
-    const publishable = byName("anon") ?? byType("publishable");
-    const secret = byName("service_role") ?? byType("secret");
-    if (!publishable || !secret) throw new Error(`Project ${ref} has no publishable or secret API key`);
-    return { publishable, secret };
+    const pairs = { legacy: legacyPair(keys), new: newPair(keys) };
+    if (pairs.legacy && !(await this.legacyKeysEnabled(ref))) pairs.legacy = null;
+    const pair = pairs[prefer] ?? pairs[prefer === "legacy" ? "new" : "legacy"];
+    if (!pair) {
+      const masked = keys.some((k) => k.api_key && !revealed(k.api_key));
+      throw new Error(
+        masked
+          ? `Project ${ref}: the access token cannot reveal secret API keys; use a token with the project's secrets permission`
+          : `Project ${ref} has no publishable and secret API key pair`,
+      );
+    }
+    return pair;
+  }
+
+  private async legacyKeysEnabled(ref: string): Promise<boolean> {
+    const status = await this.call<{ enabled?: boolean }>("GET", `/projects/${ref}/api-keys/legacy`).catch(
+      () => null,
+    );
+    return status?.enabled !== false;
   }
 
   getAuthConfig(ref: string): Promise<{ site_url?: string; uri_allow_list?: string }> {
@@ -117,6 +134,30 @@ export class SupabaseApi {
       uri_allow_list: list.join(","),
     });
   }
+}
+
+/** Without `reveal`, or without permission to reveal, secret keys come back with `·` in place of characters. */
+function revealed(key: string): boolean {
+  return !key.includes("·");
+}
+
+function legacyPair(keys: ApiKey[]): ProjectKeys | null {
+  const find = (name: string) =>
+    keys.find((k) => k.name === name && (k.type ?? "legacy") === "legacy" && k.api_key && revealed(k.api_key))
+      ?.api_key;
+  const publishable = find("anon");
+  const secret = find("service_role");
+  return publishable && secret ? { publishable, secret } : null;
+}
+
+function newPair(keys: ApiKey[]): ProjectKeys | null {
+  const find = (type: "publishable" | "secret") => {
+    const usable = keys.filter((k) => k.type === type && k.api_key && revealed(k.api_key));
+    return (usable.find((k) => k.name === "default") ?? usable[0])?.api_key;
+  };
+  const publishable = find("publishable");
+  const secret = find("secret");
+  return publishable && secret ? { publishable, secret } : null;
 }
 
 /** The plan-gate envelope: `{"error":{"code":"entitlement_required","feature":"branching_limit","upgrade_url":...}}`. */

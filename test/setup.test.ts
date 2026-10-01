@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, type Config } from "../src/config.js";
 import { checkLocal, compareVersions, hasDefaultPrivileges } from "../src/commands/doctor.js";
 import { init, timestampBefore } from "../src/commands/init.js";
 import { needsIsolatedDb, type PullRequestEvent } from "../src/commands/pr.js";
@@ -63,6 +63,14 @@ describe("loadConfig", () => {
     expect(() => loadConfig({}, project({ "wrangler.json": wrangler(null) }))).toThrow(/supabaseProjectRef/);
   });
 
+  it("rejects an unknown choice", () => {
+    const dir = project({
+      "wrangler.jsonc": wrangler(null),
+      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT, apiKeys: "anon" }),
+    });
+    expect(() => loadConfig({}, dir)).toThrow(/"apiKeys" in swp.config.json must be "legacy" or "new"/);
+  });
+
   it("reads the worker name from wrangler.toml", () => {
     const dir = project({
       "wrangler.toml": `# the worker\nname = "toml-app"\nmain = "src/worker.ts"\n`,
@@ -79,7 +87,7 @@ describe("loadConfig", () => {
 });
 
 describe("doctor", () => {
-  const config = {
+  const config: Config = {
     worker: "app",
     supabaseProjectRef: PARENT,
     trunk: "main",
@@ -87,6 +95,7 @@ describe("doctor", () => {
     supabaseDir: "supabase",
     isolatedLabel: "isolated-db",
     checkPath: "/",
+    apiKeys: "legacy",
   };
   const levels = (dir: string) => checkLocal(config, dir).map((f) => `${f.level}: ${f.message}`);
 

@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { SupabaseApi } from "../src/supabase.js";
+import { SupabaseApi, type ApiKey } from "../src/supabase.js";
 
 const REF = "parentrefparentref00";
+
+const legacy: ApiKey[] = [
+  { name: "anon", type: "legacy", api_key: "eyJ.anon" },
+  { name: "service_role", type: "legacy", api_key: "eyJ.service" },
+];
+const fresh: ApiKey[] = [
+  { name: "default", type: "publishable", api_key: "sb_publishable_abc" },
+  { name: "default", type: "secret", api_key: "sb_secret_abc" },
+];
 
 function api(routes: Record<string, { status?: number; body: unknown }>) {
   const seen: string[] = [];
@@ -15,6 +24,66 @@ function api(routes: Record<string, { status?: number; body: unknown }>) {
   }) as unknown as typeof fetch;
   return { supabase: new SupabaseApi("token", fetchImpl), seen };
 }
+
+const keysRoute = (keys: ApiKey[], legacyEnabled = true) => ({
+  [`/projects/${REF}/api-keys?reveal=true`]: { body: keys },
+  [`/projects/${REF}/api-keys/legacy`]: { body: { enabled: legacyEnabled } },
+});
+
+describe("keys", () => {
+  it("uses the legacy pair when that is all the project has", async () => {
+    const { supabase } = api(keysRoute(legacy));
+    expect(await supabase.keys(REF, "new")).toEqual({ publishable: "eyJ.anon", secret: "eyJ.service" });
+  });
+
+  it("uses the publishable and secret pair when that is all the project has", async () => {
+    const { supabase } = api(keysRoute(fresh, false));
+    expect(await supabase.keys(REF, "legacy")).toEqual({
+      publishable: "sb_publishable_abc",
+      secret: "sb_secret_abc",
+    });
+  });
+
+  it("follows the preference when the project has both", async () => {
+    const { supabase } = api(keysRoute([...legacy, ...fresh]));
+    expect(await supabase.keys(REF, "legacy")).toEqual({ publishable: "eyJ.anon", secret: "eyJ.service" });
+    expect(await supabase.keys(REF, "new")).toEqual({
+      publishable: "sb_publishable_abc",
+      secret: "sb_secret_abc",
+    });
+  });
+
+  it("skips legacy keys the project has disabled", async () => {
+    const { supabase } = api(keysRoute([...legacy, ...fresh], false));
+    expect((await supabase.keys(REF, "legacy")).secret).toBe("sb_secret_abc");
+  });
+
+  it("prefers the key named default over other keys of its type", async () => {
+    const { supabase } = api(
+      keysRoute([
+        { name: "ci", type: "secret", api_key: "sb_secret_ci" },
+        ...fresh,
+        { name: "mobile", type: "publishable", api_key: "sb_publishable_mobile" },
+      ]),
+    );
+    expect(await supabase.keys(REF, "new")).toEqual({
+      publishable: "sb_publishable_abc",
+      secret: "sb_secret_abc",
+    });
+  });
+
+  it("never hands out a masked secret key", async () => {
+    const { supabase } = api(
+      keysRoute([fresh[0]!, { name: "default", type: "secret", api_key: "sb_secret_ab·····" }]),
+    );
+    await expect(supabase.keys(REF, "new")).rejects.toThrow(/cannot reveal secret API keys/);
+  });
+
+  it("does not pair keys of different kinds", async () => {
+    const { supabase } = api(keysRoute([legacy[0]!, fresh[1]!]));
+    await expect(supabase.keys(REF)).rejects.toThrow(/no publishable and secret API key pair/);
+  });
+});
 
 describe("createBranch", () => {
   const create = (status: number, body: unknown) =>

@@ -39,7 +39,7 @@ export function assertIsolated(branch: Branch, parent: string): void {
 }
 
 export async function supabaseValues(ref: string, deps: Deps): Promise<SupabaseValues> {
-  const keys = await deps.supabase.keys(ref);
+  const keys = await deps.supabase.keys(ref, deps.config.apiKeys);
   return {
     SUPABASE_URL: projectUrl(ref),
     SUPABASE_PUBLISHABLE_KEY: keys.publishable,

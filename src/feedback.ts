@@ -149,11 +149,16 @@ export class Feedback {
   }
 
   /** Reports on `work` (down) when the PR closes. */
-  async close(work: () => Promise<void>): Promise<void> {
+  /** `isolated`: the PR had its own database, which Supabase's integration may already have deleted. */
+  async close(work: () => Promise<void>, isolated = false): Promise<void> {
     if (!this.commentOn && !this.deploymentsOn) return work();
     const own = await branchFor(this.branch, this.deps).catch(() => undefined);
     const database: Database | undefined =
-      own && !own.persistent ? { kind: "own", name: own.name, ref: own.project_ref } : undefined;
+      own && !own.persistent
+        ? { kind: "own", name: own.name, ref: own.project_ref }
+        : isolated
+          ? { kind: "own", name: this.branch }
+          : undefined;
     try {
       await work();
     } catch (err) {

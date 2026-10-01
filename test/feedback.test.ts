@@ -270,6 +270,14 @@ describe("Feedback deployment", () => {
     expect(gh.deployments.map((d) => d.states[0])).toEqual(["inactive", "inactive", "success"]);
   });
 
+  it("says the PR's own database was removed even when the integration deleted it first", async () => {
+    const gh = fakeGitHub();
+    await new Feedback(event("closed"), deps(gh.fetchImpl).deps).close(async () => {}, true);
+    expect(gh.comments.at(-1)?.body).toMatch(/The Preview and its own database `feat\/x` were removed/);
+    await new Feedback(event("closed"), deps(gh.fetchImpl).deps).close(async () => {});
+    expect(gh.comments.at(-1)?.body).toMatch(/The shared database stays/);
+  });
+
   it("ignores deployments without its payload, and reads a payload GitHub returns as a string", async () => {
     const gh = fakeGitHub();
     await new Feedback(event(), deps(gh.fetchImpl).deps).run(false, async () => {});

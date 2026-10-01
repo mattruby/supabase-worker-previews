@@ -13,6 +13,7 @@ Observed on real Cloudflare and Supabase Pro accounts in September 2026, with wr
 - The first branch created on a never-branched project either relabels the project itself as that branch, or creates a real database and renames the project's branch `main`. Both were seen on different projects. `swp shared` creates a throwaway first branch so a real one is never mistaken for production.
 - `GET /v1/branches/{ref}` 404s for several seconds after creation.
 - Branch status reaches `FUNCTIONS_DEPLOYED` before the migrations finish. `swp` waits until `supabase_migrations.schema_migrations` holds as many rows as there are local migration files.
+- When a PR closes, the GitHub integration deletes its branch database, usually before the PR's own close workflow looks for it (measured: `swp down` found nothing left to delete). Decide what to report from whether the PR needed its own database, not from what remains.
 - Persistent branches refuse `DELETE` until patched `persistent: false`. `swp down` never deletes them.
 - Branch billing is per hour of compute (roughly $10 a month for an always-on Micro branch).
 - The Management API has no field for whether a project is connected to GitHub. `GET /v1/projects/{branch_ref}/actions` lists a branch's runs; a run the integration made carries `git_config: {owner, repo, ref}` and clone/pull steps. A connected branch can also have older runs with `git_config: null`, so look for any run that has it.

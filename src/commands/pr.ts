@@ -86,9 +86,9 @@ export function needsIsolatedDb(event: PullRequestEvent, files: string[], config
 export async function pr(event: PullRequestEvent, deps: FeedbackDeps): Promise<void> {
   const branch = event.pull_request.head.ref;
   const feedback = new Feedback(event, deps);
-  if (event.action === "closed") return feedback.close(() => down(branch, deps, event.number));
   const files = await changedFiles(event, deps.githubToken, deps.fetchImpl);
   const isolated = needsIsolatedDb(event, files, deps.config);
+  if (event.action === "closed") return feedback.close(() => down(branch, deps, event.number), isolated);
   deps.runner.log(
     `PR #${event.number} (${branch}): ${isolated ? "its own database" : `the shared "${deps.config.sharedBranch}" database`}`,
   );

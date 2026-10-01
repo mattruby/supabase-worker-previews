@@ -29,7 +29,7 @@ const STATUS: Record<CommentState["phase"], string> = {
 };
 
 const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\n/g, " ");
-const code = (text: string) => `\`${cell(text)}\``;
+const code = (text: string) => `\`${cell(text).replace(/`/g, "'")}\``;
 
 function databaseCell(db: Database | undefined, dashboardUrl: string): string {
   if (!db) return "Unknown";
@@ -39,8 +39,8 @@ function databaseCell(db: Database | undefined, dashboardUrl: string): string {
 }
 
 function reason(error: string): string {
-  const text = error.length > 1500 ? `${error.slice(0, 1500)}...` : error;
-  return text.includes("\n") ? `\n\n\`\`\`\n${text}\n\`\`\`` : ` ${text}`;
+  const text = (error.length > 1500 ? `${error.slice(0, 1500)}...` : error).replace(/`{3,}/g, "'''");
+  return `\n\n\`\`\`text\n${text}\n\`\`\``;
 }
 
 export function renderComment(s: CommentState): string {

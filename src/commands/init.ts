@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CONFIG_FILE,
@@ -66,6 +66,16 @@ function linkedProjectRef(cwd: string): string | undefined {
   return existsSync(path) ? readFileSync(path, "utf8").trim() : undefined;
 }
 
+/** Exists, or is a symlink (even a dangling one), so init must not write through it. */
+function present(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function init(options: InitOptions = {}, cwd = process.cwd()): void {
   const log = options.log ?? console.log;
   const wrangler = readWranglerConfig(cwd);
@@ -79,15 +89,20 @@ export function init(options: InitOptions = {}, cwd = process.cwd()): void {
     );
   const write = (path: string, content: string | Buffer) => {
     if (options.dryRun) return;
+    let existing = dirname(path);
+    while (!existsSync(existing)) existing = dirname(existing);
+    const inside = relative(realpathSync(cwd), realpathSync(existing));
+    if (inside.startsWith("..") || isAbsolute(inside))
+      throw new Error(`${relative(cwd, path)} would be written outside ${cwd} through a symlink; refusing.`);
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, content);
+    writeFileSync(path, content, { flag: "wx" });
   };
   if (options.dryRun) log("Dry run: nothing is written.\n");
 
   const configPath = join(cwd, configFileIn(cwd));
   let needsRef: boolean;
-  if (existsSync(configPath)) {
-    needsRef = !hasProjectRef(readFileSync(configPath, "utf8"));
+  if (present(configPath)) {
+    needsRef = !existsSync(configPath) || !hasProjectRef(readFileSync(configPath, "utf8"));
     log(`- ${basename(configPath)} exists, left alone`);
   } else {
     const linked = linkedProjectRef(cwd);
@@ -123,7 +138,7 @@ export function init(options: InitOptions = {}, cwd = process.cwd()): void {
   }
 
   const workflowPath = join(cwd, WORKFLOW);
-  if (existsSync(workflowPath)) log(`- ${WORKFLOW} exists, left alone`);
+  if (present(workflowPath)) log(`- ${WORKFLOW} exists, left alone`);
   else {
     write(
       workflowPath,

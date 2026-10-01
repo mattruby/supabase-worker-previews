@@ -1,7 +1,7 @@
 name: Preview database
 
-# The same job as supabase-previews.yml, through the published action. It runs
-# the project's installed supabase-worker-previews when there is one, else downloads the package.
+# The same job as supabase-previews.yml, through the published action. After
+# npm ci it runs the project's own supabase-worker-previews and wrangler.
 
 on:
   pull_request:
@@ -21,7 +21,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # For a fixed version, pin the action to a release commit SHA instead of the moving v0 tag.
       - uses: mattruby/supabase-worker-previews@v0
         with:
           supabase-access-token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

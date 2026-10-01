@@ -1,8 +1,16 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadConfig, type Config } from "../src/config.js";
+import { loadDotenv, loadConfig, type Config } from "../src/config.js";
 import {
   checkLocal,
   checkRemote,
@@ -50,6 +58,23 @@ describe("parseJsonc", () => {
       "list": [1, 2,],
     }`;
     expect(parseJsonc(text)).toEqual({ name: "app", url: "https://x.dev/a//b", odd: "a,}", list: [1, 2] });
+  });
+});
+
+describe("loadDotenv", () => {
+  it("sets only the token variables, never NODE_OPTIONS or PATH, and keeps values already set", () => {
+    const dir = project({
+      ".env.supabase-worker-previews":
+        "SUPABASE_ACCESS_TOKEN=from-file\nCLOUDFLARE_API_TOKEN=from-file\nNODE_OPTIONS=--require ./evil.cjs\nPATH=/evil\n",
+    });
+    const env: Record<string, string | undefined> = { CLOUDFLARE_API_TOKEN: "from-shell", PATH: "/usr/bin" };
+    const loaded = loadDotenv(join(dir, ".env.supabase-worker-previews"), env);
+    expect(loaded).toEqual(["SUPABASE_ACCESS_TOKEN"]);
+    expect(env).toEqual({
+      CLOUDFLARE_API_TOKEN: "from-shell",
+      PATH: "/usr/bin",
+      SUPABASE_ACCESS_TOKEN: "from-file",
+    });
   });
 });
 
@@ -335,6 +360,27 @@ describe("doctor online", () => {
 });
 
 describe("init", () => {
+  it("never writes through a dangling symlink", () => {
+    const dir = project({ "wrangler.jsonc": wrangler(null) });
+    const outside = mkdtempSync(join(tmpdir(), "outside-"));
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    symlinkSync(join(outside, "config.json"), join(dir, "supabase-worker-previews.json"));
+    symlinkSync(join(outside, "workflow.yml"), join(dir, ".github/workflows/supabase-previews.yml"));
+    init({ supabaseProjectRef: PARENT, log: () => {} }, dir);
+    expect(existsSync(join(outside, "config.json"))).toBe(false);
+    expect(existsSync(join(outside, "workflow.yml"))).toBe(false);
+  });
+
+  it("refuses to write into a directory that is a symlink out of the project", () => {
+    const dir = project({ "wrangler.jsonc": wrangler(null) });
+    const outside = mkdtempSync(join(tmpdir(), "outside-"));
+    symlinkSync(outside, join(dir, ".github"));
+    expect(() => init({ supabaseProjectRef: PARENT, log: () => {} }, dir)).toThrow(
+      /outside .* through a symlink/,
+    );
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
   it("leaves a legacy swp.config.json alone instead of writing a second config", () => {
     const dir = project({
       "wrangler.jsonc": wrangler(null),

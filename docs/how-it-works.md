@@ -167,6 +167,10 @@ The comment needs `pull-requests: write` and the deployment `deployments: write`
 
 With `"pr"`, `up`, `check` and `down` need `--pr <n>` (otherwise: `previewName is "pr", so pass the PR number (--pr <n>)`), and `supabase-worker-previews pr` uses the event's PR number. The Supabase branch stays tied to the git branch either way.
 
+Previews are matched by exact name only. Different branches can share a URL slug (`feat/x`, `feat-x` and `Feat/X` all become `feat-x`), so matching by slug could let one PR change or delete another's Preview.
+
+With `"branch"`, two open PRs from the same git branch (into different bases) share one Preview and one Supabase branch, and closing either one runs `down` for both. Use `"pr"` naming if you open more than one PR from a branch.
+
 ## Cleaning up: `supabase-worker-previews prune`
 
 `down` runs when a PR closes, but leftovers can still pile up: a Preview of a branch that was deleted without a PR, a database whose close event was missed. `supabase-worker-previews prune` lists them, and deletes them only with `--yes` (never in `--dry-run`). It reads the repo's branches and open PRs with `GITHUB_TOKEN`, from `--repo <owner/name>` or `GITHUB_REPOSITORY`.

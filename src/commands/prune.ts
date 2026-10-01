@@ -107,6 +107,11 @@ export async function prune(
   const { repo, githubToken: token, fetchImpl } = deps;
   const open = await openPullRequests(repo, token, fetchImpl);
   const existing = await repoBranches(repo, token, fetchImpl);
+  if (!existing.includes(config.trunk))
+    throw new Error(
+      `${repo} has no branch ${config.trunk} (the trunk), so it is probably not this project's repo; ` +
+        "refusing to plan deletions. Check --repo, GITHUB_REPOSITORY or the origin remote.",
+    );
   const supabaseBranches = await deps.supabase.listBranches(config.supabaseProjectRef);
   const openHeads = new Set(open.map((p) => p.head));
   const closedHeads: string[] = [];

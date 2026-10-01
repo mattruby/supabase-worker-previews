@@ -26,12 +26,16 @@ type Env = Record<string, unknown>;
  */
 export function parseOverride(raw: unknown): SupabaseValues | null {
   if (typeof raw !== "string" || !raw) return null;
-  const values = JSON.parse(raw) as Record<string, unknown>;
+  const values: unknown = JSON.parse(raw);
+  if (!values || typeof values !== "object" || Array.isArray(values))
+    throw new Error(`${OVERRIDE_SECRET} must be a JSON object of the four SUPABASE_* values`);
+  const picked = {} as SupabaseValues;
   for (const name of SUPABASE_VARS) {
-    if (typeof values[name] !== "string" || !values[name])
-      throw new Error(`${OVERRIDE_SECRET} is missing ${name}`);
+    const value = (values as Record<string, unknown>)[name];
+    if (typeof value !== "string" || !value) throw new Error(`${OVERRIDE_SECRET} is missing ${name}`);
+    picked[name] = value;
   }
-  return values as SupabaseValues;
+  return picked;
 }
 
 /**
@@ -58,17 +62,59 @@ export function publicConfigFromEnv(env: object): PublicConfig | null {
     : null;
 }
 
-export function publicConfigScript(config: PublicConfig, globalName = DEFAULT_GLOBAL): string {
+export type ScriptOptions = {
+  /** `"json"` emits a non-executing data block, which a strict Content-Security-Policy allows. */
+  script?: "inline" | "json";
+  /** Nonce for the inline script, matching the page's CSP `script-src 'nonce-...'`. */
+  nonce?: string;
+};
+
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+const NONCE = /^[A-Za-z0-9+/=_-]+$/;
+
+export function publicConfigScript(
+  config: PublicConfig,
+  globalName = DEFAULT_GLOBAL,
+  options: ScriptOptions = {},
+): string {
+  if (!IDENTIFIER.test(globalName))
+    throw new Error(`globalName "${globalName}" is not a JavaScript identifier`);
   const json = JSON.stringify(config).replace(/</g, "\\u003c");
-  return `<script>window.${globalName}=${json}</script>`;
+  if (options.script === "json") return `<script type="application/json" id="${globalName}">${json}</script>`;
+  const nonce = options.nonce && NONCE.test(options.nonce) ? ` nonce="${options.nonce}"` : "";
+  return `<script${nonce}>window.${globalName}=${json}</script>`;
 }
+
+/** The nonce a response's CSP allows scripts with: `script-src`, else `default-src`. */
+export function cspNonce(csp: string | null): string | undefined {
+  if (!csp) return undefined;
+  const directives = new Map(
+    csp.split(";").map((d) => {
+      const [name = "", ...values] = d.trim().split(/\s+/);
+      return [name.toLowerCase(), values] as const;
+    }),
+  );
+  const sources = directives.get("script-src") ?? directives.get("default-src") ?? [];
+  return sources.map((s) => /^'nonce-([^']+)'$/.exec(s)?.[1]).find((n) => n !== undefined);
+}
+
+type DocumentLike = { getElementById(id: string): { textContent: string | null } | null };
 
 /** Browser side: the values the Worker injected, or null under a dev server that did not. */
 export function readPublicConfig(
   globalName = DEFAULT_GLOBAL,
   scope: object = globalThis,
 ): PublicConfig | null {
-  const value = (scope as Env)[globalName] as Partial<PublicConfig> | undefined;
+  let value = (scope as Env)[globalName] as Partial<PublicConfig> | undefined;
+  const doc = (scope as { document?: DocumentLike }).document;
+  if (!value && doc) {
+    const text = doc.getElementById(globalName)?.textContent;
+    try {
+      value = text ? (JSON.parse(text) as Partial<PublicConfig>) : undefined;
+    } catch {
+      value = undefined;
+    }
+  }
   return value?.supabaseUrl && value.supabaseKey
     ? { supabaseUrl: value.supabaseUrl, supabaseKey: value.supabaseKey }
     : null;
@@ -117,6 +163,11 @@ export type PreviewOptions = {
   inject?: boolean;
   /** Serve which database this deployment uses at /.well-known/supabase-preview. Default true. */
   identity?: boolean;
+  /**
+   * `"inline"` (default) sets `window[globalName]`, with the nonce from the response's CSP when it has one;
+   * `"json"` emits a data block that `readPublicConfig()` parses, for a strict CSP without nonces.
+   */
+  script?: "inline" | "json";
 };
 
 /** Any Worker handler object, including `ExportedHandler<Env>`, whose `fetch` takes the workers `Request`. */
@@ -145,7 +196,7 @@ export function withSupabasePreviews<H extends object, E extends object = EnvOf<
   handler: H & Handler,
   options: PreviewOptions = {},
 ): H {
-  const { globalName = DEFAULT_GLOBAL, inject = true, identity = true } = options;
+  const { globalName = DEFAULT_GLOBAL, inject = true, identity = true, script = "inline" } = options;
   const wrapped: Record<string, unknown> = { ...handler };
   for (const [name, fn] of Object.entries(handler)) {
     if (typeof fn !== "function" || name === "fetch") continue;
@@ -163,7 +214,9 @@ export function withSupabasePreviews<H extends object, E extends object = EnvOf<
       if (identity && new URL(request.url).pathname === IDENTITY_PATH) return identityResponse(env);
       const response = await fetchFn.call(handler, request, env, ctx);
       const config = inject ? publicConfigFromEnv(env) : null;
-      return config ? injectIntoHtml(response, publicConfigScript(config, globalName)) : response;
+      if (!config) return response;
+      const nonce = cspNonce(response.headers.get("content-security-policy"));
+      return injectIntoHtml(response, publicConfigScript(config, globalName, { script, nonce }));
     };
   }
   return wrapped as H;

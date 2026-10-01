@@ -176,6 +176,18 @@ describe("up", () => {
     ]);
   });
 
+  it("refuses the trunk and any persistent branch, which up must never repoint", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    await expect(up("main", deps(s.supabase, fakeCloudflare().cloudflare))).rejects.toThrow(/is the trunk/);
+    const tracked: Branch = { ...sharedBranch, name: "staging", git_branch: "staging" };
+    const s2 = fakeSupabase([main, tracked]);
+    await expect(
+      up("staging", deps(s2.supabase, fakeCloudflare([record("staging")]).cloudflare)),
+    ).rejects.toThrow(/is persistent/);
+    expect(s.log.redirects).toEqual([]);
+    expect(s2.log.redirects).toEqual([]);
+  });
+
   it("reuses the branch the GitHub integration already made", async () => {
     const own: Branch = {
       id: "2",
@@ -213,6 +225,20 @@ describe("shared", () => {
     const s = fakeSupabase([main]);
     await shared(deps(s.supabase, fakeCloudflare().cloudflare));
     expect(s.log.created).toEqual([{ name: "preview", gitBranch: "main", persistent: true }]);
+  });
+
+  it("refuses a sharedBranch that names the production branch before writing anything", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const c = fakeCloudflare();
+    const d = deps(s.supabase, c.cloudflare, { config: { ...config, sharedBranch: "main" } });
+    await expect(shared(d)).rejects.toThrow(/production project/);
+    expect(s.log.updated).toEqual([]);
+    expect(s.log.created).toEqual([]);
+    const dry = deps(s.supabase, c.cloudflare, {
+      config: { ...config, sharedBranch: "main" },
+      runner: { ...quietRunner, dryRun: true },
+    });
+    await expect(shared(dry)).rejects.toThrow(/production project/);
   });
 
   it("refuses a project without branching instead of creating its first branch", async () => {
@@ -471,12 +497,23 @@ describe("previewName pr", () => {
 });
 
 describe("matchPreview", () => {
-  it("finds a Preview by its git branch name or by slug", () => {
+  it("finds a Preview by its exact git branch name", () => {
     expect(matchPreview([record("docs/promote-trigger")], "docs/promote-trigger")?.slug).toBe(
       "docs-promote-trigger",
     );
-    expect(matchPreview([{ ...record("x"), name: "feat-y", slug: "feat-y" }], "feat/y")?.name).toBe("feat-y");
     expect(matchPreview([record("feat/x")], "feat/z")).toBeUndefined();
+  });
+
+  it("never matches another branch's Preview through a shared slug", () => {
+    expect(matchPreview([record("feat/x")], "feat-x")).toBeUndefined();
+    expect(matchPreview([record("feat/x")], "Feat/X")).toBeUndefined();
+  });
+
+  it("down for a branch that shares a slug leaves the other branch's Preview alone", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const c = fakeCloudflare([record("feat/x")]);
+    await down("feat-x", deps(s.supabase, c.cloudflare));
+    expect(c.calls.deleted).toEqual([]);
   });
 });
 

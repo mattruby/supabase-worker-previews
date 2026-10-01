@@ -46,7 +46,11 @@ type Call = { method: string; path: string; body?: Record<string, unknown> };
 
 /** An in-memory GitHub REST API plus the Preview's identity route. */
 function fakeGitHub(
-  opts: { comments?: { id: number; body: string }[]; fail?: number; files?: string[] } = {},
+  opts: {
+    comments?: { id: number; body: string; user?: { type: string } }[];
+    fail?: number;
+    files?: string[];
+  } = {},
 ) {
   const comments = [...(opts.comments ?? [])];
   const deployments: { id: number; environment: string; payload: unknown; states: string[] }[] = [];
@@ -64,7 +68,7 @@ function fakeGitHub(
     let m: RegExpExecArray | null;
     if (method === "GET" && /^\/issues\/\d+\/comments$/.test(path)) return Response.json(comments);
     if (method === "POST" && /^\/issues\/\d+\/comments$/.test(path)) {
-      const comment = { id: 100 + comments.length, body: body!.body as string };
+      const comment = { id: 100 + comments.length, body: body!.body as string, user: { type: "Bot" } };
       comments.push(comment);
       return Response.json(comment, { status: 201 });
     }
@@ -163,7 +167,18 @@ describe("renderComment", () => {
     expect(body).toContain("| **Failed** (");
     expect(body).toContain("Not deployed yet");
     expect(body).toContain("Shared [`preview`]");
-    expect(body).toContain("**Reason:** The Preview of feat/x never served preview");
+    expect(body).toContain("**Reason:**\n\n```text\nThe Preview of feat/x never served preview\n```");
+  });
+
+  it("cannot be broken out of by backticks or fences in a branch name or error", () => {
+    const body = renderComment({
+      ...base,
+      phase: "failed",
+      database: { kind: "own", name: "x`](https://evil.example)**pwned**`" },
+      error: "boom\n```\n[click](https://evil.example)",
+    });
+    expect(body).not.toContain("`](https://evil.example)");
+    expect(body.match(/```/g)).toHaveLength(2);
   });
 
   it("says what was removed on close", () => {
@@ -198,8 +213,8 @@ describe("Feedback comment", () => {
   it("finds an earlier run's comment by its marker and ignores ones that only mention it", async () => {
     const gh = fakeGitHub({
       comments: [
-        { id: 1, body: `Why does ${COMMENT_MARKER} show up?` },
-        { id: 2, body: `${COMMENT_MARKER}\nold` },
+        { id: 1, body: `Why does ${COMMENT_MARKER} show up?`, user: { type: "User" } },
+        { id: 2, body: `${COMMENT_MARKER}\nold`, user: { type: "Bot" } },
       ],
     });
     await new Feedback(event(), deps(gh.fetchImpl).deps).run(false, async () => {});
@@ -220,7 +235,17 @@ describe("Feedback comment", () => {
     expect(gh.comments[0]!.body).toContain("**Failed**");
     expect(gh.comments[0]!.body).toContain(`Own branch [\`feat/x\`]`);
     expect(gh.comments[0]!.body).toContain(`(\`${OWN}\`)`);
-    expect(gh.comments[0]!.body).toContain("**Reason:** The Preview of feat/x never served");
+    expect(gh.comments[0]!.body).toContain("**Reason:**\n\n```text\nThe Preview of feat/x never served");
+  });
+
+  it("never takes over a person's comment that copies the marker", async () => {
+    const gh = fakeGitHub({
+      comments: [{ id: 1, body: `${COMMENT_MARKER}\nfake Passed`, user: { type: "User" } }],
+    });
+    await new Feedback(event(), deps(gh.fetchImpl).deps).run(false, async () => {});
+    expect(gh.writes().some((c) => c.method === "PATCH" && c.path === "/issues/comments/1")).toBe(false);
+    expect(gh.comments[0]!.body).toBe(`${COMMENT_MARKER}\nfake Passed`);
+    expect(gh.writes().some((c) => c.method === "POST" && c.path.includes("comments"))).toBe(true);
   });
 });
 

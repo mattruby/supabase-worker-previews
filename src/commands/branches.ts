@@ -77,10 +77,10 @@ export async function shared(deps: Deps): Promise<string> {
   const parent = config.supabaseProjectRef;
   runner.log(`Shared Preview database "${config.sharedBranch}" on ${parent}, tracking ${config.trunk}`);
   const branches = await supabase.listBranches(parent);
+  const existing = branches.find((b) => b.name === config.sharedBranch);
+  if (existing) assertIsolated(existing, parent);
   if (runner.dryRun) {
-    runner.log(
-      `  ${branches.some((b) => b.name === config.sharedBranch) ? "update" : "create"} the persistent branch`,
-    );
+    runner.log(`  ${existing ? "update" : "create"} the persistent branch`);
     return `<${config.sharedBranch}>`;
   }
   if (!branches.some((b) => b.is_default))
@@ -88,7 +88,7 @@ export async function shared(deps: Deps): Promise<string> {
       `Branching is not enabled on ${parent}. Connect the repo in the Supabase dashboard ` +
         "(project settings, Integrations, GitHub, automatic branching on), then run supabase-worker-previews shared again.",
     );
-  let branch = branches.find((b) => b.name === config.sharedBranch);
+  let branch = existing;
   if (!branch) {
     branch = await supabase.createBranch(parent, {
       name: config.sharedBranch,
@@ -129,15 +129,23 @@ export async function shared(deps: Deps): Promise<string> {
  */
 export async function up(gitBranch: string, deps: Deps, pr?: number): Promise<string> {
   const { config, runner, supabase } = deps;
+  if (gitBranch === config.trunk)
+    throw new Error(
+      `${gitBranch} is the trunk; its Preview uses the shared "${config.sharedBranch}" database, which up must not repoint.`,
+    );
   runner.log(`Isolated database for ${gitBranch}`);
   if (runner.dryRun) {
     runner.log(`  find or create the Supabase branch for ${gitBranch}, wait for its migrations`);
     runner.log(`  set ${OVERRIDE_SECRET} on the Preview of ${gitBranch}`);
     return `<${gitBranch}>`;
   }
+  const found = await branchFor(gitBranch, deps);
+  if (found?.persistent)
+    throw new Error(
+      `Supabase branch "${found.name}" is persistent; up only uses a branch database of its own.`,
+    );
   const branch =
-    (await branchFor(gitBranch, deps)) ??
-    (await supabase.createBranch(config.supabaseProjectRef, { name: gitBranch, gitBranch }));
+    found ?? (await supabase.createBranch(config.supabaseProjectRef, { name: gitBranch, gitBranch }));
   assertIsolated(branch, config.supabaseProjectRef);
   const ref = branch.project_ref;
   await waitForMigrations(ref, deps);

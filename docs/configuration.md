@@ -63,6 +63,8 @@ In `--dry-run`, `shared`, `up`, `check`, `down`, `pr` and `prune` still need `SU
 | `GITHUB_TOKEN`                   | `pr`, `prune`                                                                  |
 | `SUPABASE_WORKER_PREVIEWS_DEBUG` | optional: set to `1` to print the stack trace of an error                      |
 
+Put them in the shell, or in `.env.supabase-worker-previews` (or the file `--dotenv` names). A dotenv file may set only the five variables above; anything else in it, such as `NODE_OPTIONS`, is ignored, and a variable already set in the shell wins.
+
 A command missing a token names each one and where to get it. A rejected token fails with one line ending `<TOKEN> is invalid or expired; see <tokens guide>`.
 
 [Tokens](tokens.md) lists the least-privilege scopes for each.
@@ -139,29 +141,36 @@ permissions:
 
 ## GitHub Action
 
-Instead of installing the package and calling `npx supabase-worker-previews pr`, a workflow can use the action ([full template](../templates/supabase-previews-action.yml)). It runs the project's installed `supabase-worker-previews` when there is one, else `supabase-worker-previews@<version>`.
+Instead of calling `npx supabase-worker-previews pr`, a workflow can use the action ([full template](../templates/supabase-previews-action.yml)). Install your dependencies first: the action runs the project's own `supabase-worker-previews` and wrangler, and only when the package is not installed does it fall back to the exact version the action was released with. It never installs wrangler.
 
 ```yaml
-- uses: actions/checkout@v4
-- uses: mattruby/supabase-worker-previews@v0
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  with:
+    persist-credentials: false
+- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+  with:
+    node-version: 24
+    cache: npm
+- run: npm ci --no-audit --no-fund
+- uses: mattruby/supabase-worker-previews@v0 # or a release commit SHA, for a fixed version
   with:
     supabase-access-token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
-| Input                   | Default        | Effect                                                                           |
-| ----------------------- | -------------- | -------------------------------------------------------------------------------- |
-| `command`               | `pr`           | The `supabase-worker-previews` command to run                                    |
-| `args`                  | (none)         | Extra arguments, such as `--dry-run`; split on spaces                            |
-| `working-directory`     | `.`            | Directory holding `supabase-worker-previews.json` and the wrangler config        |
-| `version`               | `"0"`          | Version to download when the project does not install `supabase-worker-previews` |
-| `github-token`          | `github.token` | Token for the PR comment and the deployment                                      |
-| `supabase-access-token` | (required)     | Organization-scoped Supabase access token                                        |
-| `cloudflare-api-token`  | (required)     | Cloudflare API token that can manage the Worker's Previews                       |
-| `cloudflare-account-id` | (required)     | Cloudflare account ID                                                            |
-| `comment`               | `"true"`       | `"false"` passes `--no-comment`                                                  |
-| `deployments`           | `"true"`       | `"false"` passes `--no-deployments`                                              |
+| Input                   | Default        | Effect                                                                    |
+| ----------------------- | -------------- | ------------------------------------------------------------------------- |
+| `command`               | `pr`           | The `supabase-worker-previews` command to run                             |
+| `args`                  | (none)         | Extra arguments, such as `--dry-run`; split on spaces                     |
+| `working-directory`     | `.`            | Directory holding `supabase-worker-previews.json` and the wrangler config |
+| `version`               | the release's  | Exact version to download when the project does not install the package   |
+| `github-token`          | `github.token` | Token for the PR comment and the deployment                               |
+| `supabase-access-token` | (required)     | Organization-scoped Supabase access token                                 |
+| `cloudflare-api-token`  | (required)     | Cloudflare API token that can manage the Worker's Previews                |
+| `cloudflare-account-id` | (required)     | Cloudflare account ID                                                     |
+| `comment`               | `"true"`       | `"false"` passes `--no-comment`                                           |
+| `deployments`           | `"true"`       | `"false"` passes `--no-deployments`                                       |
 
 See [action.yml](../action.yml).
 
@@ -173,17 +182,18 @@ Import from `supabase-worker-previews` in the Worker and in the browser.
 
 Wraps the Worker's default export. Every handler (`fetch`, `scheduled`, `queue`, ...) receives `env` with `SUPABASE_OVERRIDE` applied; `fetch` also injects the public config into HTML and answers the identity route.
 
-| Option       | Default                 | Effect                                                                                   |
-| ------------ | ----------------------- | ---------------------------------------------------------------------------------------- |
-| `globalName` | `"__SUPABASE_PUBLIC__"` | Window property the config is written to; pass the same name to `readPublicConfig(name)` |
-| `inject`     | `true`                  | Inject the public config into HTML                                                       |
-| `identity`   | `true`                  | Serve `/.well-known/supabase-preview`                                                    |
+| Option       | Default                 | Effect                                                                                                                                                                                                                                               |
+| ------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `globalName` | `"__SUPABASE_PUBLIC__"` | Window property the config is written to; pass the same name to `readPublicConfig(name)`                                                                                                                                                             |
+| `inject`     | `true`                  | Inject the public config into HTML                                                                                                                                                                                                                   |
+| `identity`   | `true`                  | Serve `/.well-known/supabase-preview`                                                                                                                                                                                                                |
+| `script`     | `"inline"`              | `"inline"` sets `window[globalName]` and reuses the `'nonce-...'` from your response's CSP `script-src` (or `default-src`) when it has one; `"json"` emits a non-executing `<script type="application/json">` block, for a strict CSP without nonces |
 
 Read Supabase settings from the handler's `env`, or from `process.env` under `nodejs_compat`. Code that imports `env` from `cloudflare:workers` sees the raw values, not the override. The [framework guides](README.md#frameworks) show where each framework hands you `env`.
 
 ### `readPublicConfig(globalName?)`
 
-In the browser, returns `{ supabaseUrl, supabaseKey }` as the Worker injected them, or `null` when the page was not served through the Worker (a dev server), so you can fall back:
+In the browser, returns `{ supabaseUrl, supabaseKey }` as the Worker injected them (from the window global, or from the JSON block when `script: "json"`), or `null` when the page was not served through the Worker (a dev server), so you can fall back:
 
 ```ts
 import { createClient } from "@supabase/supabase-js";

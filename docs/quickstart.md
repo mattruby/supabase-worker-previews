@@ -204,7 +204,7 @@ permissions:
 
 If a secret is missing, `supabase-worker-previews pr` fails with an `::error::` naming the empty secrets (a bot's PR, such as Dependabot's, only gets a `::warning::`).
 
-To run the published GitHub Action instead of the installed CLI, run `npx supabase-worker-previews init --action` before the workflow exists, or replace the setup-node, `npm ci` and `npx supabase-worker-previews pr` steps with:
+To run the published GitHub Action instead of the installed CLI, run `npx supabase-worker-previews init --action` before the workflow exists, or replace the `npx supabase-worker-previews pr` step (keep setup-node and `npm ci`, which install the wrangler the action runs) with:
 
 ```yaml
 - uses: mattruby/supabase-worker-previews@v0
@@ -214,7 +214,7 @@ To run the published GitHub Action instead of the installed CLI, run `npx supaba
     cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
-It runs the project's installed `supabase-worker-previews` when there is one, else downloads `supabase-worker-previews@0`. [templates/supabase-previews-action.yml](../templates/supabase-previews-action.yml) is the full workflow.
+It runs the project's own `supabase-worker-previews` and wrangler; only if the package is not installed does it download the exact version the action was released with. For a fixed version, pin the action to a release commit SHA instead of `@v0`. [templates/supabase-previews-action.yml](../templates/supabase-previews-action.yml) is the full workflow.
 
 Commit `previews.vars`, the wrapped Worker and `config.toml`, and push to the trunk. The integration migrates the `preview` branch on trunk pushes.
 

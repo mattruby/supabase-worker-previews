@@ -166,6 +166,16 @@ describe("prune", () => {
     ]);
   });
 
+  it("refuses a repo without the trunk branch instead of planning to delete everything", async () => {
+    const wrongRepo = (url: string) =>
+      url.includes("/branches") ? Response.json([{ name: "other-main" }]) : github(url);
+    const { deps, deleted } = setup(wrongRepo);
+    await expect(prune({ ...deps, githubToken: "t", repo: "o/r", yes: true })).rejects.toThrow(
+      /has no branch main \(the trunk\)/,
+    );
+    expect(deleted).toEqual({ branches: [], previews: [] });
+  });
+
   it("deletes the plan with --yes", async () => {
     const { deps, deleted } = setup(github);
     await prune({ ...deps, githubToken: "t", repo: "o/r", yes: true });

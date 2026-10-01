@@ -1,5 +1,4 @@
 import { apiErrorMessage } from "./http.js";
-import { previewName } from "./preview-name.js";
 import type { Runner } from "./run.js";
 
 export type CloudflareAuth = { apiToken: string; accountId: string };
@@ -12,11 +11,12 @@ export type PreviewRecord = {
   deployed_on: string | null;
 };
 
-/** Workers Builds names a Preview after the raw git branch; Cloudflare derives the slug and hostname. */
-export function matchPreview(previews: PreviewRecord[], gitBranch: string): PreviewRecord | undefined {
-  return (
-    previews.find((p) => p.name === gitBranch) ?? previews.find((p) => p.slug === previewName(gitBranch))
-  );
+/**
+ * Workers Builds names a Preview after the raw git branch. Match that name exactly: different
+ * branches can share a slug (`feat/x`, `feat-x`, `Feat/X`), so a slug match could act on another PR's Preview.
+ */
+export function matchPreview(previews: PreviewRecord[], name: string): PreviewRecord | undefined {
+  return previews.find((p) => p.name === name);
 }
 
 /** Preview operations go through wrangler; only the subdomain lookup is a direct API call. */
@@ -34,11 +34,25 @@ export class CloudflareApi {
     return { CLOUDFLARE_API_TOKEN: this.auth.apiToken, CLOUDFLARE_ACCOUNT_ID: this.auth.accountId };
   }
 
+  /** The project's own wrangler only: `--no-install` keeps npx from fetching the latest one with the token. */
   private wrangler(args: string[], opts: { input?: string; captureStderr?: boolean } = {}): string {
-    return this.runner.exec("npx", ["wrangler", ...args, "--worker-name", this.worker], {
-      env: this.env,
-      ...opts,
-    });
+    try {
+      return this.runner.exec("npx", ["--no-install", "wrangler", ...args, "--worker-name", this.worker], {
+        env: this.env,
+        ...opts,
+        captureStderr: true,
+      });
+    } catch (err) {
+      const message = (err as Error).message;
+      if (/could not determine executable|npx canceled|not found/i.test(message))
+        throw new Error(
+          `wrangler is not installed in this project: npm install --save-dev wrangler@latest\n${message}`,
+          {
+            cause: err,
+          },
+        );
+      throw err;
+    }
   }
 
   private async api<T>(path: string): Promise<T> {

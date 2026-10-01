@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { parseEnv } from "node:util";
 import { parse as parseToml } from "smol-toml";
 import { parseJsonc } from "./jsonc.js";
 import { didYouMean } from "./suggest.js";
@@ -9,6 +10,28 @@ export const CONFIG_FILE = "supabase-worker-previews.json";
 export const LEGACY_CONFIG_FILE = "swp.config.json";
 export const DOTENV_FILE = ".env.supabase-worker-previews";
 export const LEGACY_DOTENV_FILE = ".env.swp";
+
+/** The only variables a dotenv file may set: anything else (NODE_OPTIONS, PATH) would reach wrangler. */
+export const DOTENV_KEYS = [
+  "SUPABASE_ACCESS_TOKEN",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "GITHUB_TOKEN",
+  "SUPABASE_WORKER_PREVIEWS_DEBUG",
+];
+
+/** Copies the token variables from a dotenv file into `env`; variables already set there win. */
+export function loadDotenv(path: string, env: Record<string, string | undefined> = process.env): string[] {
+  const values = parseEnv(readFileSync(path, "utf8"));
+  const loaded: string[] = [];
+  for (const key of DOTENV_KEYS) {
+    const value = values[key];
+    if (value === undefined || env[key] !== undefined) continue;
+    env[key] = value;
+    loaded.push(key);
+  }
+  return loaded;
+}
 
 /** The config file to read in `cwd`: the current name, else the legacy one if only that exists. */
 export function configFileIn(cwd = process.cwd()): string {

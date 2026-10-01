@@ -17,6 +17,9 @@ Find your symptom below, then follow its cause and fix. Each heading is phrased 
 - [`node: .env.supabase-worker-previews: not found` or exit code 9](#node-envsupabase-worker-previews-not-found-or-exit-code-9)
 - [A token is invalid or expired](#a-token-is-invalid-or-expired)
 - [Upgrading from 0.1: `swp` is not found](#upgrading-from-01-swp-is-not-found)
+- [`wrangler is not installed in this project`](#wrangler-is-not-installed-in-this-project)
+- [`prune` says the repo has no branch named after the trunk](#prune-says-the-repo-has-no-branch-named-after-the-trunk)
+- [`up` refuses the trunk or a persistent branch](#up-refuses-the-trunk-or-a-persistent-branch)
 
 ## Start here
 
@@ -228,6 +231,18 @@ Two files were renamed too. Both old names still work, with a warning, until you
 | `swp.config.json` | `supabase-worker-previews.json`    |
 | `.env.swp`        | `.env.supabase-worker-previews`    |
 | `SWP_DEBUG=1`     | `SUPABASE_WORKER_PREVIEWS_DEBUG=1` |
+
+## `wrangler is not installed in this project`
+
+wrangler is started with `npx --no-install`, so it must be in your project's `node_modules`: `npm install --save-dev wrangler@latest` (4.135.0 or later). In GitHub Actions, run `npm ci` before `supabase-worker-previews pr` or the action. It is never downloaded on the fly, because that would hand your Cloudflare token to whatever version is latest at that moment.
+
+## `prune` says the repo has no branch named after the trunk
+
+`prune` refuses to plan when the repo it read has no branch named like `trunk` in `supabase-worker-previews.json`, because then every branch and Preview would look like a leftover. Check `--repo`, `GITHUB_REPOSITORY`, or the `origin` remote (a fork's `origin` is the usual cause), and that `trunk` is right.
+
+## `up` refuses the trunk or a persistent branch
+
+The trunk's Preview uses the shared Preview database, and a persistent branch is long-lived on purpose, so `up` never repoints either. Run `up` for a feature branch; use `shared` to repair the shared Preview database.
 
 ## Still stuck
 

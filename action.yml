@@ -16,8 +16,8 @@ inputs:
     description: Directory holding supabase-worker-previews.json and the wrangler config.
     default: "."
   version:
-    description: supabase-worker-previews version to run when the project does not install it.
-    default: "0"
+    description: Exact supabase-worker-previews version to run when the project does not install it. Defaults to the version this action was released with.
+    default: "0.2.0"
   github-token:
     description: Token for the PR comment and the GitHub deployment.
     default: ${{ github.token }}
@@ -52,7 +52,6 @@ runs:
         SWP_VERSION: ${{ inputs.version }}
         SWP_COMMENT: ${{ inputs.comment }}
         SWP_DEPLOYMENTS: ${{ inputs.deployments }}
-        npm_config_yes: "true"
       run: |
         set -euo pipefail
         flags=()

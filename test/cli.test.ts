@@ -6,7 +6,7 @@ import { CloudflareApi } from "../src/cloudflare.js";
 import { loadConfig } from "../src/config.js";
 import { checkRemote, doctor, formatReport, type Section } from "../src/commands/doctor.js";
 import { apiErrorMessage, summarizeBody } from "../src/http.js";
-import { makeRunner, parseArgs } from "../src/run.js";
+import { makeRunner, type Runner, parseArgs } from "../src/run.js";
 import { colorEnabled, makeStyle } from "../src/style.js";
 import { didYouMean } from "../src/suggest.js";
 import { SupabaseApi } from "../src/supabase.js";
@@ -198,6 +198,26 @@ describe("errors", () => {
     await expect(api.workersSubdomain()).rejects.toThrow(
       "Cloudflare API GET /workers/subdomain: 502 502 Bad Gateway",
     );
+  });
+
+  it("runs only the project's own wrangler, never one npx would download", () => {
+    const calls: string[][] = [];
+    const runner: Runner = { dryRun: false, log: () => {}, exec: (_cmd, args) => (calls.push(args), "") };
+    new CloudflareApi(runner, { apiToken: "t", accountId: "a" }, "app").deletePreview("feat/x");
+    expect(calls[0]!.slice(0, 2)).toEqual(["--no-install", "wrangler"]);
+  });
+
+  it("says to install wrangler when the project has none", () => {
+    const runner: Runner = {
+      dryRun: false,
+      log: () => {},
+      exec: () => {
+        throw new Error("npx exited 1:\nnpm error npx canceled due to missing packages and no YES option");
+      },
+    };
+    expect(() =>
+      new CloudflareApi(runner, { apiToken: "t", accountId: "a" }, "app").deletePreview("x"),
+    ).toThrow(/wrangler is not installed in this project: npm install --save-dev wrangler@latest/);
   });
 
   it("names the token a Supabase 403 is about", async () => {

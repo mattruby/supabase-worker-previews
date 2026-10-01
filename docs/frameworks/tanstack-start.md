@@ -39,6 +39,8 @@ export default withSupabasePreviews({
 
 Call `handler.fetch(request)` from your own function rather than passing `handler.fetch` directly: its second parameter is TanStack's request options, and the wrapper calls `fetch(request, env, ctx)`.
 
+If your build runs the app through Nitro, Nitro calls the entry's `fetch(request)` without `env` ([measured](../../skills/supabase-worker-previews/references/gotchas.md#cloudflare-worker-previews)). The wrapper then uses `process.env` as the env (vars and secrets are there under `nodejs_compat`), so the override, the injection and the identity route still work.
+
 ## Reading env on the server
 
 This is the framework where the caveat bites. TanStack's environment-variables guide calls the `cloudflare:workers` env binding the canonical way to read env from anywhere, including module scope, and Cloudflare's guide uses `import { env } from "cloudflare:workers"` throughout. `handler.fetch` does not receive the Worker's `env` at all. So:

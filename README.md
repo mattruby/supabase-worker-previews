@@ -37,7 +37,7 @@ One build serves any database. The Worker reads its Supabase settings at request
 
 ## Quickstart
 
-Needs a Worker deployed by [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/), wrangler 4.135.0 or later, a Supabase project on a plan with branching, and the repo on GitHub. The [full quickstart](docs/quickstart.md) has every dashboard setting and the expected output.
+Needs Node 22 or later, a Worker deployed by [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/), wrangler 4.135.0 or later, a Supabase project on a plan with branching, and the repo on GitHub. The [full quickstart](docs/quickstart.md) has every dashboard setting and the expected output.
 
 ```bash
 npm install --save-dev supabase-worker-previews
@@ -89,47 +89,50 @@ Handlers receive `env` with the override applied, and so does `process.env` unde
 }
 ```
 
-<!-- TODO(wrangler-toml): document wrangler.toml support once merged. Today doctor reads only the `name` from wrangler.toml and warns that the previews block is not checked. -->
+`wrangler.json` and `wrangler.toml` work the same way (a `[previews]` table in TOML); `swp` reads the first of `wrangler.jsonc`, `wrangler.json` and `wrangler.toml` it finds, and `doctor` checks all three.
 
-<!-- TODO(action): once the composite action merges, show the `uses: mattruby/supabase-worker-previews@v0` workflow here as the alternative to the `npx swp pr` template. -->
+To use the GitHub Action instead of the installed CLI, see [GitHub Action](#github-action).
 
 ## Commands
 
-| Command                               | Does                                                                                                                      |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `swp init`                            | Scaffold config, grants migration and workflow (never overwrites)                                                         |
-| `swp doctor`                          | Check wrangler version, `previews` block, bindings, grants migration, auth redirects; with a token, the shared branch too |
-| `swp shared`                          | Create or repair the shared Preview database                                                                              |
-| `swp up --branch <b>`                 | Give a branch's Preview its own database                                                                                  |
-| `swp check --branch <b> [--isolated]` | Fail unless the Preview serves the right database; fail at once on production                                             |
-| `swp down --branch <b>`               | Delete the Preview and its own database                                                                                   |
-| `swp pr`                              | Inside a `pull_request` workflow: `down` on close, else `up` when needed, then `check`                                    |
-| `swp prune [--repo <r>] [--yes]`      | List leftovers (git branch deleted, or its PR closed) and delete them with `--yes`                                        |
+| Command                                             | Does                                                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `swp init [--project-ref <ref>] [--trunk <branch>]` | Scaffold config, grants migration and workflow (never overwrites)                                                         |
+| `swp doctor`                                        | Check wrangler, the `previews` block, bindings, static HTML, grants migration, auth redirects; with a token, Supabase too |
+| `swp shared`                                        | Create or repair the shared Preview database                                                                              |
+| `swp up [--branch <b>] [--pr <n>]`                  | Give a branch's Preview its own database                                                                                  |
+| `swp check [--branch <b>] [--pr <n>] [--isolated]`  | Fail unless the Preview serves the right database; fail at once on production                                             |
+| `swp down [--branch <b>] [--pr <n>]`                | Delete the Preview and its own database                                                                                   |
+| `swp pr`                                            | Inside a `pull_request` workflow: `down` on close, else `up` or `release`, then `check`, and report on the PR             |
+| `swp prune [--repo <owner/name>] [--yes]`           | List leftovers of deleted branches and closed PRs; delete them with `--yes`                                               |
 
-<!-- TODO(prune): add the `swp prune` row once merged. -->
+`--branch` defaults to `WORKERS_CI_BRANCH`, then `GITHUB_HEAD_REF`, then the current git branch. `--pr <n>` names the PR whose `pr-<n>` Preview to use when `previewName` is `"pr"`. `--repo` defaults to `GITHUB_REPOSITORY`.
 
-`--branch` defaults to `WORKERS_CI_BRANCH`, then `GITHUB_HEAD_REF`, then the current git branch. Every command takes `--dry-run` and `--env-file <path>` (default `.env.swp` when present); `--worker`, `--project-ref` and `--trunk` override the config file. Environment: `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `GITHUB_TOKEN` for `swp pr`.
+Flags for every command: `--dry-run`, `--env-file <path>` (default `.env.swp` when present), and `--worker <name>`, `--project-ref <ref>`, `--trunk <branch>`, which override the config file. `swp pr` also takes `--no-comment` and `--no-deployments`.
+
+Environment: `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `GITHUB_TOKEN` for `swp pr` and `swp prune`. `swp --help` prints the same summary.
 
 `swp.config.json`:
 
-| Field                | Default         |                                                      |
-| -------------------- | --------------- | ---------------------------------------------------- |
-| `supabaseProjectRef` | (required)      | The production project                               |
-| `worker`             | wrangler `name` |                                                      |
-| `trunk`              | `main`          | The branch the shared Preview database tracks        |
-| `sharedBranch`       | `preview`       | Name of that Supabase branch                         |
-| `supabaseDir`        | `supabase`      | Changes under it give a PR its own database          |
-| `isolatedLabel`      | `isolated-db`   | PR label that asks for one anyway                    |
-| `checkPath`          | `/`             | Page `check` scans when the identity route is absent |
-| `workersSubdomain`   | looked up       | Your `*.workers.dev` subdomain                       |
-| `previewName`        | `branch`        | `pr` finds Previews named `pr-<n>` (pass `--pr <n>`) |
-| `apiKeys`            | `legacy`        | API keys to prefer: `legacy` or `new` (`sb_...`)     |
-
-<!-- TODO(preview-name-pr): add the `previewName` field (`"pr"` naming) once merged. -->
+| Field                   | Default         |                                                                                       |
+| ----------------------- | --------------- | ------------------------------------------------------------------------------------- |
+| `supabaseProjectRef`    | (required)      | The production project                                                                |
+| `worker`                | wrangler `name` |                                                                                       |
+| `trunk`                 | `main`          | The branch the shared Preview database tracks                                         |
+| `sharedBranch`          | `preview`       | Name of that Supabase branch                                                          |
+| `supabaseDir`           | `supabase`      | Changes under it give a PR its own database                                           |
+| `isolatedLabel`         | `isolated-db`   | PR label that asks for one anyway                                                     |
+| `checkPath`             | `/`             | Page `check` scans when the identity route is absent                                  |
+| `workersSubdomain`      | looked up       | Your `*.workers.dev` subdomain                                                        |
+| `previewName`           | `"branch"`      | `"branch"`: Previews named after the git branch (Workers Builds). `"pr"`: `pr-<n>`    |
+| `apiKeys`               | `"legacy"`      | Key pair to hand Previews when a branch has both: `"legacy"` (JWT) or `"new"` (`sb_`) |
+| `prComment`             | `true`          | `swp pr` keeps one status comment on the PR                                           |
+| `githubDeployments`     | `true`          | `swp pr` records a GitHub deployment for the PR head                                  |
+| `deploymentEnvironment` | `"Preview"`     | GitHub environment for those deployments; `{branch}` in it makes one per branch       |
 
 ## Pull request feedback
 
-`swp pr` keeps one comment on the PR (Preview URL, which database it serves, pass or fail with the reason, the commit) and records a GitHub deployment, which gives the PR a "View deployment" button. On close, the comment says what was removed and the deployments are marked inactive. GitHub API errors (a fork's read-only token, missing permissions, rate limits) become `::warning::` lines; only the database check fails the job. Turn either off with `"prComment": false` or `"githubDeployments": false` in `swp.config.json`, or `--no-comment` / `--no-deployments`. Deployments share one transient environment, `Preview` (set `"deploymentEnvironment"`; `"Preview: {branch}"` gives one per branch), and each PR only ever retires its own. The workflow needs:
+`swp pr` keeps one comment on the PR (Preview URL, which database it serves, pass or fail with the reason, the commit) and records a GitHub deployment, which gives the PR a "View deployment" button. On close, the comment says what was removed and the deployments are marked inactive. GitHub API errors (missing permissions, rate limits) become `::warning::` lines; only the database work (`up`, `release`, `check`, `down`) fails the job. A PR from a fork, or a run where any of the four secrets is empty, is skipped with a `::notice::` or `::warning::` and exits 0, because GitHub gives fork PRs no secrets. In `--dry-run` there is no comment or deployment. Turn either off with `"prComment": false` or `"githubDeployments": false` in `swp.config.json`, or `--no-comment` / `--no-deployments`. Deployments share one transient environment, `Preview` (set `"deploymentEnvironment"`; `"Preview: {branch}"` gives one per branch), and each PR only ever retires its own. The workflow needs:
 
 ```yaml
 permissions:
@@ -152,9 +155,13 @@ Instead of installing the package and calling `npx swp pr`, a workflow can use t
     # working-directory: apps/web   version: "0"   comment: "false"   deployments: "false"   args: --dry-run
 ```
 
+Inputs: `command` (default `pr`), `args`, `working-directory`, `version` (default `"0"`), `github-token` (default `github.token`), `supabase-access-token`, `cloudflare-api-token`, `cloudflare-account-id`, `comment` and `deployments` (default `"true"`). See [action.yml](action.yml).
+
 ## Safety
 
-- `swp` never writes to, repoints or deletes the production project through a branch record, and never deletes a persistent branch.
+- `swp` never writes to, repoints or deletes the production project through a branch record, and never deletes a persistent branch. When `swp pr` drops a database a PR no longer needs, and when `swp prune` cleans up, they also spare the shared branch and any branch tracking the trunk.
+- `swp shared` refuses a project without branching rather than creating its first branch.
+- `swp prune` only lists until you pass `--yes`.
 - `check` fails the first time a Preview serves production.
 - `doctor` fails if `previews.vars` names production or holds a secret.
 

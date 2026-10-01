@@ -1,13 +1,13 @@
 # Tokens
 
-`swp` reads three credentials from the environment (or `.env.swp`):
+`swp` reads these credentials from the environment (or `.env.swp`):
 
-| Variable                | Used by                                                         | For                                   |
-| ----------------------- | --------------------------------------------------------------- | ------------------------------------- |
-| `SUPABASE_ACCESS_TOKEN` | `doctor` (online checks), `shared`, `up`, `check`, `down`, `pr` | the Supabase Management API           |
-| `CLOUDFLARE_API_TOKEN`  | `shared`, `up`, `check`, `down`, `pr`                           | wrangler and two Cloudflare API reads |
-| `CLOUDFLARE_ACCOUNT_ID` | same                                                            | the account those calls target        |
-| `GITHUB_TOKEN`          | `pr`                                                            | listing the PR's changed files        |
+| Variable                | Used by                                                                  | For                                                                |
+| ----------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `SUPABASE_ACCESS_TOKEN` | `doctor` (online checks), `shared`, `up`, `check`, `down`, `pr`, `prune` | the Supabase Management API                                        |
+| `CLOUDFLARE_API_TOKEN`  | `shared`, `up`, `check`, `down`, `pr`, `prune`                           | wrangler and two Cloudflare API reads                              |
+| `CLOUDFLARE_ACCOUNT_ID` | same                                                                     | the account those calls target                                     |
+| `GITHUB_TOKEN`          | `pr`, `prune`                                                            | PR files, the PR comment, deployments, the repo's branches and PRs |
 
 Items marked **unverified** could not be confirmed from official documentation as of 2026-09-30. Start from the least-privilege set below, and widen it only if a call fails with 401 or 403.
 
@@ -15,13 +15,15 @@ Items marked **unverified** could not be confirmed from official documentation a
 
 What `swp` does with it:
 
-| Call                                                              | Made by                                          |
-| ----------------------------------------------------------------- | ------------------------------------------------ |
-| `wrangler preview base-config secret bulk --worker-name <w>`      | `shared`                                         |
-| `wrangler preview secret bulk --name <preview> --worker-name <w>` | `up`                                             |
-| `wrangler preview delete --name <preview> --worker-name <w>`      | `down`                                           |
-| `GET /accounts/{id}/workers/subdomain`                            | `shared`, `up`, unless `workersSubdomain` is set |
-| `GET /accounts/{id}/workers/workers/{worker}/previews`            | `up`, `check`, `down`                            |
+| Call                                                                                                      | Made by                                      |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `wrangler preview base-config secret bulk --worker-name <w>`                                              | `shared`                                     |
+| `wrangler preview secret bulk --name <preview> --worker-name <w>`                                         | `up`                                         |
+| `wrangler preview secret list --name <preview> --json --worker-name <w>`                                  | `pr` (shared path)                           |
+| `wrangler preview secret delete SUPABASE_OVERRIDE --name <preview> --skip-confirmation --worker-name <w>` | `pr` (shared path, when an override is left) |
+| `wrangler preview delete --name <preview> --skip-confirmation --worker-name <w>`                          | `down`, `pr` (on close), `prune --yes`       |
+| `GET /accounts/{id}/workers/subdomain`                                                                    | `shared`, unless `workersSubdomain` is set   |
+| `GET /accounts/{id}/workers/workers/{worker}/previews`                                                    | `up`, `check`, `down`, `pr`, `prune`         |
 
 Create a custom token (My Profile, API Tokens, Create Token, Custom token) with:
 
@@ -38,7 +40,7 @@ What is confirmed:
 
 **Unverified:**
 
-- The exact permission for each Previews operation (secret bulk, base-config secret bulk, delete, and the Previews list). The REST API reference documents no Previews endpoints, so Workers Scripts Edit covering them is inferred from the CI guide above and from the equivalent non-Preview script secrets endpoint, which needs Workers Scripts Write ([API reference](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/secrets/methods/update/)).
+- The exact permission for each Previews operation (secret bulk, list and delete, base-config secret bulk, Preview delete, and the Previews list). The REST API reference documents no Previews endpoints, so Workers Scripts Edit covering them is inferred from the CI guide above and from the equivalent non-Preview script secrets endpoint, which needs Workers Scripts Write ([API reference](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/secrets/methods/update/)).
 - Whether wrangler makes other calls (for example to read your memberships) that need **Account Settings Read** or **User Details Read** when `CLOUDFLARE_ACCOUNT_ID` is set. If wrangler fails with an authentication error, the [Edit Cloudflare Workers](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/) template is the documented fallback; it is broader.
 - "The resources used by the Preview" suggests a token that _deploys_ Previews needs edit access to the bound resources (KV, D1, R2). `swp` does not deploy (Workers Builds does), so it should not need them.
 
@@ -53,14 +55,17 @@ Supabase personal access tokens come in two kinds ([Supabase: personal access to
 
 Use a scoped token with these permissions:
 
-| Permission           | Access     | Why                                                                                    |
-| -------------------- | ---------- | -------------------------------------------------------------------------------------- |
-| Project Settings     | Read       | `doctor` reads the production project (`GET /v1/projects/{ref}`)                       |
-| Development Branches | Read-write | list, create, read, update (`shared`) and delete (`down`) branches                     |
-| Database             | Read-write | `POST /v1/projects/{branch ref}/database/query`, used only to count applied migrations |
-| API Keys             | Read       | `GET /v1/projects/{branch ref}/api-keys?reveal=true`                                   |
-| API Key Secrets      | Read       | the same call, to reveal the secret key that goes into the Preview                     |
-| Auth Config          | Read-write | read and set the branch's Site URL and redirect list                                   |
+| Permission           | Access     | Why                                                                                                     |
+| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| Project Settings     | Read       | `doctor` reads the production project (`GET /v1/projects/{ref}`)                                        |
+| Development Branches | Read-write | list, create (`shared`, `up`), read, update (`shared`) and delete (`down`, `pr`, `prune`) branches      |
+| Database             | Read-write | `POST /v1/projects/{branch ref}/database/query`, used only to count applied migrations                  |
+| API Keys             | Read       | `GET /v1/projects/{branch ref}/api-keys?reveal=true` and `GET .../api-keys/legacy` (are legacy keys on) |
+| API Key Secrets      | Read       | the same call, to reveal the secret key that goes into the Preview                                      |
+| Auth Config          | Read-write | read and set the branch's Site URL and redirect list                                                    |
+| Action Runs          | Read       | `doctor` reads `GET /v1/projects/{branch ref}/actions` to confirm the GitHub integration                |
+
+Without API Key Secrets, the API returns secret keys masked and `swp` stops with `the access token cannot reveal secret API keys`. Without Action Runs, `doctor` cannot confirm the GitHub connection and warns.
 
 **Organization or project scope.** Each branch is its own project with its own ref, and `swp` calls the query, API keys and auth endpoints on the branch's ref, including branches created after the token. Scope the token to the **organization**. A token scoped to one project listed no organizations when measured ([gotchas](../skills/supabase-worker-previews/references/gotchas.md#supabase-branches)).
 
@@ -74,18 +79,29 @@ Use a scoped token with these permissions:
 
 ## GITHUB_TOKEN
 
-`swp pr` calls `GET /repos/{owner}/{repo}/pulls/{number}/files`, which needs **Pull requests: read** ([GitHub: permissions for GitHub Apps](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps)). The template workflow sets:
+| Call                                                                                                              | Made by           | Permission ([GitHub: permissions for GitHub Apps](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps)) |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /repos/{repo}/pulls/{n}/files`                                                                               | `pr`              | Pull requests: read                                                                                                                     |
+| `GET /repos/{repo}/issues/{n}/comments`, `POST` there, `PATCH /repos/{repo}/issues/comments/{id}`                 | `pr` (comment)    | Pull requests: write (also listed under Issues: write)                                                                                  |
+| `POST /repos/{repo}/deployments`, `GET` and `POST .../deployments/{id}/statuses`, `GET /repos/{repo}/deployments` | `pr` (deployment) | Deployments: write                                                                                                                      |
+| `GET /repos/{repo}/pulls?state=open`, `GET /repos/{repo}/pulls?state=closed&head=...`                             | `prune`           | Pull requests: read                                                                                                                     |
+| `GET /repos/{repo}/branches`                                                                                      | `prune`           | Contents: read                                                                                                                          |
+
+The `swp pr` workflow templates set:
 
 ```yaml
 permissions:
   contents: read # actions/checkout
-  pull-requests: read # swp pr lists the changed files
+  pull-requests: write # read the PR's files, keep the status comment
+  deployments: write # record the GitHub deployment
 ```
+
+`deployments: write` "permits an action to create a new deployment" ([workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)). With `--no-comment` and `--no-deployments` (or the config fields set to `false`), `pull-requests: read` alone is enough for `swp pr`. If a permission is missing, the comment or deployment is skipped with a `::warning::` and the job still passes or fails on the database check alone.
+
+A workflow that runs `swp prune` needs `contents: read` and `pull-requests: read`.
 
 Setting any permission sets the unlisted ones to `none` ([workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)), so the job has nothing else.
 
-For PRs from forks, GitHub downgrades write permissions to read ([workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)), and "with the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository" ([GitHub: using secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)). Today `swp pr` therefore fails on a fork PR with `Missing SUPABASE_ACCESS_TOKEN in the environment`.
+### Fork PRs
 
-<!-- TODO(fork-prs): describe how fork PRs are skipped once merged. -->
-<!-- TODO(pr-comment): the sticky PR comment will need `pull-requests: write` (POST/PATCH issue comments are allowed by Pull requests: write per the GitHub Apps permissions page). Update the block above once merged. -->
-<!-- TODO(github-deployments): GitHub Deployments will need `deployments: write` (workflow syntax page). Update the block above once merged. -->
+For PRs from forks, GitHub downgrades write permissions to read ([workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)), and "with the exception of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow is triggered from a forked repository" ([GitHub: using secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)). `swp pr` therefore skips a PR whose head repository differs from the base repository (or was deleted) with a `::notice::`, and a run with any of its four secrets empty with a `::warning::`. Both exit 0.

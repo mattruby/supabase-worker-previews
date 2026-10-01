@@ -32,23 +32,23 @@ sequenceDiagram
 
 ## Who owns what
 
-| Thing                                       | Owner                       | `swp`'s part                                                                                                                                             |
-| ------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Production deploy and migrations            | your trunk pipeline         | none                                                                                                                                                     |
-| Preview builds                              | Workers Builds              | reads the Previews list to find a branch's Preview and its URL                                                                                           |
-| Shared database's schema                    | Supabase GitHub integration | `swp shared` creates the persistent branch once and repairs its settings                                                                                 |
-| Per-PR database lifecycle                   | Supabase GitHub integration | `swp up` reuses the integration's branch, or asks Supabase for one (a labelled PR, or before the integration has made it); `down` deletes a leftover one |
-| Shared database's public values             | your wrangler config        | `swp shared` prints them; `doctor` checks them                                                                                                           |
-| Shared database's secret key                | Preview base config         | `swp shared` writes it                                                                                                                                   |
-| Per-PR database values                      | Preview secret              | `swp up` writes `SUPABASE_OVERRIDE`                                                                                                                      |
-| Which database a Preview serves, at runtime | `withSupabasePreviews()`    | applies the override, injects public config, serves the identity route                                                                                   |
-| Proof                                       | `swp check`                 | fails unless the Preview serves the expected database                                                                                                    |
+| Thing                                       | Owner                       | `swp`'s part                                                                                                                                                                                              |
+| ------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Production deploy and migrations            | your trunk pipeline         | none                                                                                                                                                                                                      |
+| Preview builds                              | Workers Builds              | reads the Previews list to find a branch's Preview and its URL                                                                                                                                            |
+| Shared database's schema                    | Supabase GitHub integration | `swp shared` creates the persistent branch once and repairs its settings                                                                                                                                  |
+| Per-PR database lifecycle                   | Supabase GitHub integration | `swp up` reuses the integration's branch, or asks Supabase for one (a labelled PR, or before the integration has made it); `swp pr` deletes one a PR no longer needs; `down` and `prune` delete leftovers |
+| Shared database's public values             | your wrangler config        | `swp shared` prints them; `doctor` checks them                                                                                                                                                            |
+| Shared database's secret key                | Preview base config         | `swp shared` writes it                                                                                                                                                                                    |
+| Per-PR database values                      | Preview secret              | `swp up` writes `SUPABASE_OVERRIDE`; `swp pr` removes it when the PR no longer needs its own database                                                                                                     |
+| Which database a Preview serves, at runtime | `withSupabasePreviews()`    | applies the override, injects public config, serves the identity route                                                                                                                                    |
+| Proof                                       | `swp check`                 | fails unless the Preview serves the expected database                                                                                                                                                     |
 
 ## The shared Preview database
 
 `swp shared` creates a Supabase branch named `preview` (`sharedBranch`), marked persistent and tied to the trunk (`git_branch = trunk`). Because the GitHub integration owns it, every push to the trunk runs the new migrations on it, so the shared database's schema follows production's.
 
-If the project has never branched, `shared` first creates and removes a throwaway branch. The first branch on a never-branched project either relabels the project itself as that branch or creates a real database and renames the project's branch `main`; both were seen. The throwaway keeps a real branch from being mistaken for production.
+If the project has no default branch (branching was never enabled), `shared` stops with `Branching is not enabled on <ref>. Connect the repo in the Supabase dashboard (...)`. Connecting the Supabase GitHub integration with automatic branching on enables it. `swp` does not create the first branch itself: the first branch made on a never-branched project either relabelled the project itself as that branch or created a real database and renamed the project's branch `main` (both were seen), and `swp` must never touch the production project's branch record.
 
 `shared` then waits for the migrations (below), sets the branch's auth Site URL to the production `workers.dev` hostname with `https://*-<worker>.<subdomain>.workers.dev/**` as an allowed redirect, writes the branch's secret key to the Preview base config, and prints the public values for `previews.vars`.
 
@@ -66,17 +66,33 @@ So `swp up` writes **one** secret, `SUPABASE_OVERRIDE`, whose value is a JSON ob
 
 Writing a Preview secret creates a new deployment of that Preview, so the override takes effect without a rebuild.
 
-The secret key comes from the branch's API keys: the legacy `anon`/`service_role` pair when the project has it, otherwise the newer publishable/secret pair. Either way the Worker sees it as `SUPABASE_SERVICE_ROLE_KEY`.
+### Which API keys
 
-<!-- TODO(new-keys): document new Supabase key support (names, any new vars) once merged. -->
+`swp` reads the branch's keys with `GET /v1/projects/{ref}/api-keys?reveal=true` and hands the Preview one matched pair:
 
-<!-- TODO(stale-override): today the override stays on a Preview if a PR later stops needing its own database (for example the label is removed or the supabase/ change is reverted), and `check` then fails because the Preview still serves the PR branch. Describe the removal behaviour once merged. -->
+| `apiKeys` (`swp.config.json`) | Pair                                                                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `"legacy"` (default)          | `anon` and `service_role` (JWTs), unless the project has disabled legacy keys                                    |
+| `"new"`                       | the `publishable` and `secret` keys (`sb_publishable_...`, `sb_secret_...`), preferring the ones named `default` |
+
+If the preferred pair is missing, `swp` uses the other kind. Either way the Worker sees the pair as `SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SERVICE_ROLE_KEY`; the variable names do not change. The new keys are not JWTs, so Edge Functions that verify JWTs reject them ([measured](../skills/supabase-worker-previews/references/gotchas.md#supabase-branches)); stay on `"legacy"` if yours do.
+
+Without permission to reveal secrets, the API returns secret keys masked with `·`. `swp` refuses those with `Project <ref>: the access token cannot reveal secret API keys; use a token with the project's secrets permission` rather than writing a masked key into a Preview.
+
+### Dropping a stale override
+
+A PR can stop needing its own database: the `isolated-db` label is removed, or the `supabase/` change is reverted. On the next run (the workflow also triggers on `unlabeled`), `swp pr` takes the shared path and first runs `release`:
+
+1. It lists the Preview's secrets (`wrangler preview secret list --json`) and, if `SUPABASE_OVERRIDE` is there, deletes it (`wrangler preview secret delete --skip-confirmation`). Deleting a secret creates a new deployment of the Preview, which then reads `previews.vars` again.
+2. It deletes the Supabase branch tied to the git branch, but only if that branch is disposable: not the default branch, not the production project, not persistent, not the shared branch, and not tracking the trunk. The integration only makes branches for PRs that change `supabase/`, so on this path the branch is one `up` made for a label.
+
+Then `check` expects the shared database as usual.
 
 ## Request-time config injection
 
 `withSupabasePreviews(handler, options)` wraps the Worker's default export:
 
-- Every handler (`fetch`, `scheduled`, `queue`, ...) receives `env` with the override applied. Under `nodejs_compat`, the override is also written into `process.env`.
+- Every handler (`fetch`, `scheduled`, `queue`, ...) receives `env` with the override applied. Under `nodejs_compat`, the override is also written into `process.env`. If a framework calls the entry without `env` (TanStack Start on Nitro calls `fetch(request)`), the wrapper uses `process.env` as the env.
 - `fetch` answers the identity route (below) before calling your handler.
 - For any response whose `content-type` contains `text/html`, it prepends `<script>window.__SUPABASE_PUBLIC__={"supabaseUrl":...,"supabaseKey":...}</script>` to `<head>`, using `HTMLRewriter` on Workers.
 - Only HTML that passes through the Worker is injected. With [static assets](https://developers.cloudflare.com/workers/static-assets/binding/#run_worker_first), a request that matches an asset (such as an SPA's `index.html`) is served without invoking the Worker by default; set `assets.run_worker_first` so HTML routes reach it.
@@ -106,10 +122,10 @@ Why request time: a Preview reuses the build Workers Builds made for its branch.
 
 ## The check
 
-`swp check --branch <b> [--isolated]`:
+`swp check [--branch <b>] [--pr <n>] [--isolated]`:
 
 1. Works out the expected database: the PR's own branch when isolated, else the `sharedBranch`. It refuses if that record is the production project.
-2. Finds the branch's Preview in `GET /accounts/{id}/workers/workers/{worker}/previews`, matching the raw git branch name first, then the slug. Workers Builds names a Preview after the raw branch and Cloudflare derives the slug and URL, so `swp` reads both rather than guessing.
+2. Finds the branch's Preview in `GET /accounts/{id}/workers/workers/{worker}/previews`, matching the raw git branch name first, then the slug. Workers Builds names a Preview after the raw branch and Cloudflare derives the slug and URL, so `swp` reads both rather than guessing. With `previewName: "pr"` it looks for `pr-<n>` instead (see below).
 3. Asks the Preview which database it serves.
 4. **Production fails at once.** The expected database passes. Anything else (no Preview yet, a Preview that was never deployed, the wrong database) is retried every 20 seconds, 45 times, because Workers Builds and `up` may still be finishing.
 
@@ -121,16 +137,45 @@ Supabase reports a branch as `FUNCTIONS_DEPLOYED` before its migrations finish. 
 
 In a `pull_request` workflow it reads the event and:
 
+- first, skips the run if the PR comes from a fork (or a deleted fork), with a `::notice::`, or if any of `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` or `GITHUB_TOKEN` is empty, with a `::warning::` naming them. Both exit 0. GitHub gives fork PRs no secrets, so failing them would only make every outside contribution red;
 - on `closed`: runs `down` (deletes the PR's own Supabase branch unless it is persistent, then the Preview);
-- otherwise: lists the PR's changed files through the GitHub API (including the old path of renamed files), decides the PR is isolated if any path starts with `supabaseDir/` or the PR has the `isolatedLabel` label, runs `up` when isolated, then `check`.
+- otherwise: lists the PR's changed files through the GitHub API (including the old path of renamed files), decides the PR is isolated if any path starts with `supabaseDir/` or the PR has the `isolatedLabel` label, runs `up` when isolated or `release` when not, then `check`.
 
-The template workflow runs on `opened`, `synchronize`, `reopened`, `labeled` and `closed`, one run at a time per branch.
+The template workflow runs on `opened`, `synchronize`, `reopened`, `labeled`, `unlabeled` and `closed`, one run at a time per branch.
 
-<!-- TODO(fork-prs): describe fork-PR skipping once merged. -->
-<!-- TODO(pr-comment): describe the sticky PR comment once merged. -->
-<!-- TODO(github-deployments): describe GitHub Deployments once merged. -->
-<!-- TODO(prune): describe `swp prune` once merged. -->
-<!-- TODO(preview-name-pr): describe `previewName: "pr"` naming once merged. -->
+### Reporting on the PR
+
+Around that work, `swp pr` reports in two ways. Both are skipped in `--dry-run`, and any GitHub API error in them (missing permission, rate limit) becomes a `::warning::` line instead of failing the job; only the database work decides the result.
+
+- **One status comment**, found by the marker `<!-- supabase-worker-previews -->` and edited in place. It is written when the run starts (Checking) and again when it ends (**Passed**, or **Failed** with the error), with the Preview link, the database (shared or its own branch, linked to the Supabase branches dashboard), the commit and a link to the run's logs. On close it says the Preview, and its own database if it had one, were removed. Turn it off with `"prComment": false` or `--no-comment`.
+- **A GitHub deployment** of the PR head, which gives the PR a "View deployment" button. It is created `in_progress`, then set to `success` with the Preview URL or `failure` with the error. Every PR shares one transient environment, `Preview`, so the repository does not collect an environment per PR that `GITHUB_TOKEN` cannot delete. Each deployment carries the PR number in its payload; after a success, and on close, `swp pr` marks that PR's older deployments inactive and never touches other PRs'. Rename the environment with `"deploymentEnvironment"`, where `{branch}` is replaced by the branch name (`"Preview: {branch}"` gives one environment per branch). Turn it off with `"githubDeployments": false` or `--no-deployments`.
+
+The comment needs `pull-requests: write` and the deployment `deployments: write`; see [tokens](tokens.md#github_token).
+
+### The GitHub Action
+
+`uses: mattruby/supabase-worker-previews@v0` ([action.yml](../action.yml)) is a composite action that runs `swp <command>` (default `pr`) with the inputs mapped to the same environment variables and flags. It runs the project's installed `swp` if `npx --no-install swp help` succeeds, otherwise `npx supabase-worker-previews@<version>` (default `0`). `comment: "false"` and `deployments: "false"` become `--no-comment` and `--no-deployments`; `args` is appended, split on spaces.
+
+## Preview names: `previewName`
+
+| `previewName`        | The Preview for a git branch is named | Use when                                                                                                                                                                  |
+| -------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"branch"` (default) | the raw git branch (`feat/x`)         | Workers Builds deploys Previews; it names them after the branch                                                                                                           |
+| `"pr"`               | `pr-<number>`                         | your own CI runs `wrangler preview --name pr-<number>`, as in Cloudflare's [automation examples](https://developers.cloudflare.com/workers/previews/automation-examples/) |
+
+With `"pr"`, `up`, `check` and `down` need `--pr <n>` (otherwise: `previewName is "pr", so pass the PR number (--pr <n>)`), and `swp pr` uses the event's PR number. The Supabase branch stays tied to the git branch either way.
+
+## Cleaning up: `swp prune`
+
+`down` runs when a PR closes, but leftovers can still pile up: a Preview of a branch that was deleted without a PR, a database whose close event was missed. `swp prune` lists them, and deletes them only with `--yes` (never in `--dry-run`). It reads the repo's branches and open PRs with `GITHUB_TOKEN`, from `--repo <owner/name>` or `GITHUB_REPOSITORY`.
+
+| Kind             | A leftover when                                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Supabase branch  | it is disposable (as above), has a git branch with no open PR, and that git branch is deleted or has a closed PR. A database whose git branch still exists and never had a PR is kept |
+| Preview (branch) | no repo branch matches its name or slug. A pushed branch without a PR keeps its Preview. A Preview you created by hand with a `--name` that matches no branch counts as a leftover    |
+| Preview (pr)     | it is named `pr-<n>` and PR `n` is not open                                                                                                                                           |
+
+The trunk's Preview is never pruned. Run it with `--yes` from a scheduled workflow, or by hand.
 
 ## Why the grants migration comes first
 
@@ -140,10 +185,12 @@ Supabase branches, and newer projects, start without default privileges for the 
 
 These are enforced in code, not by convention:
 
-- `assertIsolated` refuses any branch record that is the default branch or whose ref is the production project, before `shared`, `up`, `check` or `down` write to, repoint or delete it.
-- `down` never deletes a persistent branch.
+- `assertIsolated` refuses any branch record that is the default branch or whose ref is the production project, before `shared`, `up`, `check`, `down`, `release` or `prune` write to, repoint or delete it.
+- `shared` refuses a project without branching instead of creating its first branch.
+- `down` never deletes a persistent branch; `release` and `prune` also spare the shared branch and any branch tracking the trunk.
+- `prune` deletes nothing without `--yes`.
 - `check` throws `Preview <slug> serves the production database <ref>; refusing to pass` the first time it sees production, with no retry.
 - `doctor` fails if `previews.vars` points at the production ref or contains `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_OVERRIDE`.
-- Every command takes `--dry-run`, which prints the wrangler commands and API writes instead of running them. `shared`, `up`, `check`, `down` and `pr` still require `SUPABASE_ACCESS_TOKEN` in dry-run, and the reads still happen (`shared` lists branches, `down` lists branches and Previews, `pr` lists the PR's files).
+- Every command takes `--dry-run`, which prints the wrangler commands and API writes instead of running them. `shared`, `up`, `check`, `down`, `pr` and `prune` still require `SUPABASE_ACCESS_TOKEN` in dry-run (and `GITHUB_TOKEN` for `pr` and `prune`), and the reads still happen (`shared` lists branches; `down` lists branches and Previews; `pr` lists the PR's files and, on the shared path, Previews and branches; `prune` reads everything it plans from).
 
 [Security](security.md) covers what each token can reach.

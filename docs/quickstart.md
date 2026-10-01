@@ -8,12 +8,10 @@ You need:
 
 - A Worker whose production deploys come from [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) connected to a GitHub repo.
 - wrangler **4.135.0 or later** in the project's `devDependencies`. Earlier versions have no `wrangler preview` ([changelog](https://developers.cloudflare.com/changelog/post/2026-09-22-worker-previews/)).
-- A `wrangler.jsonc` (or `wrangler.json`) with a `name`. `wrangler.toml` works for the commands, but `doctor` cannot check its `previews` block.
+- A `wrangler.jsonc`, `wrangler.json` or `wrangler.toml` with a `name`. The examples below use JSONC; in TOML the same keys go under `[previews]`.
 - A Supabase project on a plan that includes branching. Branching is not on the Free plan ([pricing](https://supabase.com/pricing)); branch compute is billed per hour.
 - Your migrations in `supabase/migrations/` (the layout `supabase init` creates), committed to the repo.
-- Node 20 or later.
-
-<!-- TODO(wrangler-toml): update the wrangler.toml line once TOML support merges. -->
+- Node 22 or later (wrangler needs it).
 
 ## 1. Install and scaffold
 
@@ -58,7 +56,7 @@ In the Supabase dashboard: **Project Settings, Integrations, GitHub Integration*
 
 Supabase documents these options in [Branching via GitHub](https://supabase.com/docs/guides/deployment/branching/github-integration).
 
-Do this **before** `swp shared`. A branch created through the API on a project that is not linked to GitHub copies the schema without privileges, and every signed-in read 403s ([measured](../skills/supabase-worker-previews/references/gotchas.md#supabase-branches)).
+Connecting the repo with automatic branching on is what enables branching on the project. Do this **before** `swp shared`, which refuses a project without branching: `Branching is not enabled on <ref>. Connect the repo in the Supabase dashboard (...), then run swp shared again.` A branch created through the API on a project that is not linked to GitHub copies the schema without privileges, and every signed-in read 403s ([measured](../skills/supabase-worker-previews/references/gotchas.md#supabase-branches)).
 
 Then, in `supabase/config.toml`, allow your Preview hostnames as auth redirects. The integration re-applies `config.toml` to branches on every push, so a URL set only in the dashboard does not last:
 
@@ -126,7 +124,7 @@ Done: <preview ref>. Put these in the wrangler config under previews.vars:
 }
 ```
 
-On a project that has never branched, an extra line reports how branching was enabled (`branching enabled on <ref>; ...`). `shared` waits until the branch holds every local migration, which can take several minutes, then sets the branch's auth Site URL and redirect wildcard and stores its secret key in the Preview base config as `SUPABASE_SERVICE_ROLE_KEY`.
+`shared` waits until the branch holds every local migration, which can take several minutes, then sets the branch's auth Site URL and redirect wildcard and stores its secret key in the Preview base config as `SUPABASE_SERVICE_ROLE_KEY`.
 
 Paste the printed object into `previews.vars`. These values are public (see [security](security.md)); commit them.
 
@@ -166,10 +164,11 @@ Expected output when everything is in place:
 ✓ wrangler 4.145.0
 ✓ previews.vars uses <preview ref>
 ✓ 20260913235959_api_default_privileges.sql grants the API roles default privileges
+✓ Supabase builds "preview" from GitHub <owner>/<repo>, so branches run the repo's migrations
 ✓ "preview" (<preview ref>) tracks main
 ```
 
-`✗` lines fail the command; `!` lines are warnings. Without `SUPABASE_ACCESS_TOKEN` it prints `! SUPABASE_ACCESS_TOKEN not set; skipped the online checks` and checks only the local files.
+`✗` lines fail the command; `!` lines are warnings. The GitHub line comes from the branch's Supabase action runs; if none of them came from GitHub yet, doctor warns `cannot confirm the Supabase GitHub integration` (see [troubleshooting](troubleshooting.md#preview-403s-on-signed-in-reads)). If your assets directory holds HTML and `assets.run_worker_first` is unset, doctor warns that those pages would get no Supabase config. Without `SUPABASE_ACCESS_TOKEN` it prints `! SUPABASE_ACCESS_TOKEN not set; skipped the online checks` and checks only the local files.
 
 ## 7. Turn on Preview builds
 
@@ -185,9 +184,28 @@ New Workers use `npx wrangler preview` by default ([Cloudflare: build branches](
 
 ## 8. Add the GitHub Actions secrets
 
-In the repo: **Settings, Secrets and variables, Actions**, add `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The workflow `init` wrote passes them to `npx swp pr`, along with the job's `GITHUB_TOKEN`.
+In the repo: **Settings, Secrets and variables, Actions**, add `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. The workflow `init` wrote (`.github/workflows/supabase-previews.yml`) passes them to `npx swp pr`, along with the job's `GITHUB_TOKEN`. It runs on `opened`, `synchronize`, `reopened`, `labeled`, `unlabeled` and `closed`, and grants the token:
 
-<!-- TODO(action): show the composite action (`uses: mattruby/supabase-worker-previews@v0`) as an alternative workflow once merged. -->
+```yaml
+permissions:
+  contents: read
+  pull-requests: write # the status comment
+  deployments: write # the GitHub deployment
+```
+
+If a secret is missing, `swp pr` does not fail: it prints a `::warning::` naming the empty secrets and exits 0, so check the job log the first time.
+
+To run the published GitHub Action instead of the installed CLI, replace the setup-node, `npm ci` and `npx swp pr` steps with:
+
+```yaml
+- uses: mattruby/supabase-worker-previews@v0
+  with:
+    supabase-access-token: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+It runs the project's installed `swp` when there is one, else downloads `supabase-worker-previews@0`. [templates/supabase-previews-action.yml](../templates/supabase-previews-action.yml) is the full workflow.
 
 Commit `previews.vars`, the wrapped Worker and `config.toml`, and push to the trunk. The integration migrates the `preview` branch on trunk pushes.
 
@@ -197,6 +215,7 @@ Commit `previews.vars`, the wrapped Worker and `config.toml`, and push to the tr
 
 ```
 PR #12 (feat/header): the shared "preview" database
+  $ npx wrangler preview secret list --name feat/header --json --worker-name my-app
   Preview feat-header runs on preview (<preview ref>)
 ```
 
@@ -210,12 +229,14 @@ Done: https://feat-notes-my-app.<subdomain>.workers.dev now runs on <branch ref>
   Preview feat-notes runs on feat/notes (<branch ref>)
 ```
 
-While Workers Builds is still creating the Preview, `up` logs `waiting for the Preview of feat/notes to exist (n)`. `check` retries for up to 15 minutes while it waits for the right database.
+While Workers Builds is still creating the Preview, `up` logs `waiting for the Preview feat/notes to exist (n)`. `check` retries for up to 15 minutes while it waits for the right database.
 
-Closing the PR runs `swp down`: it deletes the PR's Supabase branch if the integration has not already, then deletes the Preview.
+The `secret list` call is how a shared-database PR checks for a leftover override: if the PR once had its own database (the label was removed, or the `supabase/` change reverted), `swp pr` deletes `SUPABASE_OVERRIDE` from the Preview and then the Supabase branch `up` made for it.
 
-<!-- TODO(pr-comment): describe the sticky PR comment once merged. -->
-<!-- TODO(github-deployments): describe the GitHub Deployments entry once merged. -->
-<!-- TODO(fork-prs): note that PRs from forks are skipped once merged. -->
+On the PR, `swp pr` keeps one comment, updated in place, with the status (Checking, **Passed** or **Failed** with the reason and a link to the run), a "Visit Preview" link, the database it serves and the commit. It also records a GitHub deployment in the shared `Preview` environment, which gives the PR a "View deployment" button pointing at the Preview URL.
+
+Closing the PR runs `swp down`: it deletes the PR's Supabase branch if the integration has not already, then deletes the Preview. The comment changes to say what was removed, and the PR's deployments are marked inactive.
+
+PRs from forks are skipped with a `::notice::` and exit 0: GitHub gives them no secrets, so `swp` neither points nor checks anything for them.
 
 Open the Preview URL and **sign in with a real browser**. A green check proves which database the page reads; signing in proves the grants and redirect URLs. If either fails, see [troubleshooting](troubleshooting.md).

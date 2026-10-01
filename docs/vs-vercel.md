@@ -26,8 +26,7 @@ Gaps, as documented:
 
 Costs: a GitHub workflow and three secrets in your repo, a `previews` block to keep in step with your bindings, a wrapper around the Worker, and the caveat that code reading `env` from `cloudflare:workers` does not see the override. Worker Previews [launched on 2026-09-22](https://developers.cloudflare.com/changelog/post/2026-09-22-worker-previews/) and `swp` is 0.x.
 
-<!-- TODO(pr-comment): mention the sticky PR comment once merged. -->
-<!-- TODO(github-deployments): mention GitHub Deployments once merged. -->
+On the PR, `swp pr` keeps one status comment (Preview link, database, pass or fail) and records a GitHub deployment, which gives the PR a "View deployment" button.
 
 ## Pick Vercel instead when
 

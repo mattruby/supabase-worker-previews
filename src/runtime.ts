@@ -119,18 +119,21 @@ export type PreviewOptions = {
   identity?: boolean;
 };
 
-type Handler<E> = {
-  fetch?: (request: Request, env: E, ctx: any) => Response | Promise<Response>;
-  [key: string]: unknown;
-};
+/** Any Worker handler object, including `ExportedHandler<Env>`, whose `fetch` takes the workers `Request`. */
+type Handler = { fetch?: (request: never, env: never, ctx: never) => unknown };
+
+/** The env type a handler's `fetch` declares, so callers never pass it as a generic. */
+type EnvOf<H> = H extends { fetch?: (request: never, env: infer E, ...rest: never[]) => unknown }
+  ? E & object
+  : object;
 
 /**
  * Wraps a Worker's default export. Every handler sees the override applied;
  * `fetch` also injects the public config and answers the identity route that
  * `swp check` reads.
  */
-export function withSupabasePreviews<E extends object, H extends Handler<E>>(
-  handler: H,
+export function withSupabasePreviews<H extends object, E extends object = EnvOf<H>>(
+  handler: H & Handler,
   options: PreviewOptions = {},
 ): H {
   const { globalName = DEFAULT_GLOBAL, inject = true, identity = true } = options;
@@ -141,7 +144,11 @@ export function withSupabasePreviews<E extends object, H extends Handler<E>>(
       (fn as (...a: unknown[]) => unknown).call(handler, event, resolveEnv(env), ctx);
   }
   if (handler.fetch) {
-    const fetchFn = handler.fetch;
+    const fetchFn = handler.fetch as unknown as (
+      request: Request,
+      env: E,
+      ctx: unknown,
+    ) => Response | Promise<Response>;
     wrapped.fetch = async (request: Request, rawEnv: E, ctx: unknown) => {
       const env = resolveEnv(rawEnv);
       if (identity && new URL(request.url).pathname === IDENTITY_PATH) return identityResponse(env);

@@ -3,7 +3,8 @@ name: Preview database
 # Workers Builds makes a Worker Preview of every branch; the Supabase GitHub
 # integration makes a database for every PR that changes supabase/. This
 # points each PR's Preview at the right database, proves it never serves
-# production, and cleans up when the PR closes.
+# production, and cleans up when the PR closes. It reports on the PR with one
+# status comment and a GitHub deployment (the "View deployment" button).
 
 on:
   pull_request:
@@ -15,7 +16,8 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
+  deployments: write
 
 jobs:
   preview-db:

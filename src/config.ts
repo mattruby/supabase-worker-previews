@@ -21,6 +21,10 @@ export type Config = {
   isolatedLabel: string;
   /** Path `check` fetches when the Worker does not serve the identity route. */
   checkPath: string;
+  /** `swp pr` keeps one status comment on the PR. Default true. */
+  prComment?: boolean;
+  /** `swp pr` records a GitHub deployment for the PR head. Default true. */
+  githubDeployments?: boolean;
 };
 
 export type WranglerConfig = { file: string; json: Record<string, unknown> | null; name?: string };

@@ -160,7 +160,7 @@ describe("needsIsolatedDb", () => {
   const event = (labels: string[]): PullRequestEvent => ({
     action: "synchronize",
     number: 1,
-    pull_request: { head: { ref: "feat/x" }, labels: labels.map((name) => ({ name })) },
+    pull_request: { head: { ref: "feat/x", sha: "abc" }, labels: labels.map((name) => ({ name })) },
     repository: { full_name: "o/r" },
   });
   const config = loadConfig(

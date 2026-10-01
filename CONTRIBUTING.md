@@ -23,6 +23,8 @@ npm install        # also builds dist/ through the prepare script
 
 CI runs all of these on Node 22, 24 and 26, plus the packaging check on Node 22.0.0, the oldest version `engines` allows. Run them locally before opening a pull request.
 
+To typecheck the example after changing the runtime API, run `npm install` here first (it builds `dist/`, which the example links to), then `cd examples/hono-notes && npm install && npm run typecheck`. The example is not part of the published package or the root lint and typecheck.
+
 To try a local build in a real Worker project, `npm pack` here and `npm install /path/to/supabase-worker-previews-<version>.tgz` there.
 
 ## Tests

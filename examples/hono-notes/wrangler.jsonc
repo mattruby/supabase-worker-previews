@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hono-notes",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-22",
+  // Production: the Supabase project itself.
+  "vars": {
+    "SUPABASE_URL": "https://<production ref>.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "<production publishable key>",
+    "SUPABASE_PROJECT_REF": "<production ref>",
+  },
+  // Every Preview: the shared Preview database. `npx swp shared` prints these three values.
+  // Previews inherit no vars or bindings, so anything else the Worker binds is redeclared here too.
+  "previews": {
+    "vars": {
+      "SUPABASE_URL": "https://<preview branch ref>.supabase.co",
+      "SUPABASE_PUBLISHABLE_KEY": "<preview branch publishable key>",
+      "SUPABASE_PROJECT_REF": "<preview branch ref>",
+    },
+  },
+}

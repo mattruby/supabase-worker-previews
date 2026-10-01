@@ -1,6 +1,8 @@
 # How it works
 
-`swp` adds no infrastructure of its own. Workers Builds deploys, Supabase's GitHub integration makes and migrates databases, and `swp` connects the two: it tells each Preview which database to use and then proves that it does. This page explains each part and why it is built that way. The measured platform behaviour behind each choice is in [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md).
+Every moving part of `swp`, who owns it, and why it is built that way. Read it when you want to understand a behaviour rather than just set it up.
+
+`swp` adds no infrastructure of its own. Workers Builds deploys, Supabase's GitHub integration makes and migrates databases, and `swp` connects the two: it tells each Preview which database to use and then proves that it does. The measured platform behaviour behind each choice is in [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md).
 
 ## Environments
 
@@ -36,17 +38,17 @@ sequenceDiagram
 | ------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Production deploy and migrations            | your trunk pipeline         | none                                                                                                                                                                                                      |
 | Preview builds                              | Workers Builds              | reads the Previews list to find a branch's Preview and its URL                                                                                                                                            |
-| Shared database's schema                    | Supabase GitHub integration | `swp shared` creates the persistent branch once and repairs its settings                                                                                                                                  |
-| Per-PR database lifecycle                   | Supabase GitHub integration | `swp up` reuses the integration's branch, or asks Supabase for one (a labelled PR, or before the integration has made it); `swp pr` deletes one a PR no longer needs; `down` and `prune` delete leftovers |
-| Shared database's public values             | your wrangler config        | `swp shared` prints them; `doctor` checks them                                                                                                                                                            |
-| Shared database's secret key                | Preview base config         | `swp shared` writes it                                                                                                                                                                                    |
-| Per-PR database values                      | Preview secret              | `swp up` writes `SUPABASE_OVERRIDE`; `swp pr` removes it when the PR no longer needs its own database                                                                                                     |
+| Shared Preview database's schema            | Supabase GitHub integration | `swp shared` creates the persistent branch once and repairs its settings                                                                                                                                  |
+| A PR's own database: lifecycle              | Supabase GitHub integration | `swp up` reuses the integration's branch, or asks Supabase for one (a labelled PR, or before the integration has made it); `swp pr` deletes one a PR no longer needs; `down` and `prune` delete leftovers |
+| Shared Preview database's public values     | your wrangler config        | `swp shared` prints them; `doctor` checks them                                                                                                                                                            |
+| Shared Preview database's secret key        | Preview base config         | `swp shared` writes it                                                                                                                                                                                    |
+| A PR's own database: values                 | Preview secret              | `swp up` writes `SUPABASE_OVERRIDE`; `swp pr` removes it when the PR no longer needs its own database                                                                                                     |
 | Which database a Preview serves, at runtime | `withSupabasePreviews()`    | applies the override, injects public config, serves the identity route                                                                                                                                    |
 | Proof                                       | `swp check`                 | fails unless the Preview serves the expected database                                                                                                                                                     |
 
 ## The shared Preview database
 
-`swp shared` creates a Supabase branch named `preview` (`sharedBranch`), marked persistent and tied to the trunk (`git_branch = trunk`). Because the GitHub integration owns it, every push to the trunk runs the new migrations on it, so the shared database's schema follows production's.
+`swp shared` creates a Supabase branch named `preview` (`sharedBranch`), marked persistent and tied to the trunk (`git_branch = trunk`). Because the GitHub integration owns it, every push to the trunk runs the new migrations on it, so the shared Preview database's schema follows production's.
 
 If the project has no default branch (branching was never enabled), `shared` stops with `Branching is not enabled on <ref>. Connect the repo in the Supabase dashboard (...)`. Connecting the Supabase GitHub integration with automatic branching on enables it. `swp` does not create the first branch itself: the first branch made on a never-branched project either relabelled the project itself as that branch or created a real database and renamed the project's branch `main` (both were seen), and `swp` must never touch the production project's branch record.
 
@@ -56,13 +58,13 @@ If the project has no default branch (branching was never enabled), `shared` sto
 
 A Preview copies the base config **once, when it is created**, and keeps that copy. Changing the base config never reaches an existing Preview, and redeploying does not refresh it ([measured](../skills/supabase-worker-previews/references/gotchas.md#cloudflare-worker-previews); Cloudflare: "Later changes to Base secrets apply only to new Previews", [configuration](https://developers.cloudflare.com/workers/previews/configuration/)).
 
-`previews.vars` is read from the wrangler config on every Preview deploy, so changing it reaches every Preview on its next build. The shared database's URL, publishable key and ref are public, so they can be committed there. Only the secret key goes in the base config, where staleness matters least because it only changes when you rotate it.
+`previews.vars` is read from the wrangler config on every Preview deploy, so changing it reaches every Preview on its next build. The shared Preview database's URL, publishable key and ref are public, so they can be committed there. Only the secret key goes in the base config, where staleness matters least because it only changes when you rotate it.
 
 ## The override secret
 
-An isolated PR needs four different values: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_PROJECT_REF`. They cannot be four Preview secrets, because a Worker var and a secret must never share a name, and the first three already exist as `previews.vars` and a base config secret.
+A PR with its own database needs four different values: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_PROJECT_REF`. They cannot be four Preview secrets, because a Worker var and a secret must never share a name, and the first three already exist as `previews.vars` and a base config secret.
 
-So `swp up` writes **one** secret, `SUPABASE_OVERRIDE`, whose value is a JSON object holding all four. `withSupabasePreviews()` parses it and, when present, replaces the four values for every handler. A malformed override throws `SUPABASE_OVERRIDE is missing <name>` rather than silently falling back to the shared database.
+So `swp up` writes **one** secret, `SUPABASE_OVERRIDE`, whose value is a JSON object holding all four. `withSupabasePreviews()` parses it and, when present, replaces the four values for every handler. A malformed override throws `SUPABASE_OVERRIDE is missing <name>` rather than silently falling back to the shared Preview database.
 
 Writing a Preview secret creates a new deployment of that Preview, so the override takes effect without a rebuild.
 
@@ -86,7 +88,7 @@ A PR can stop needing its own database: the `isolated-db` label is removed, or t
 1. It lists the Preview's secrets (`wrangler preview secret list --json`) and, if `SUPABASE_OVERRIDE` is there, deletes it (`wrangler preview secret delete --skip-confirmation`). Deleting a secret creates a new deployment of the Preview, which then reads `previews.vars` again.
 2. It deletes the Supabase branch tied to the git branch, but only if that branch is disposable: not the default branch, not the production project, not persistent, not the shared branch, and not tracking the trunk. The integration only makes branches for PRs that change `supabase/`, so on this path the branch is one `up` made for a label.
 
-Then `check` expects the shared database as usual.
+Then `check` expects the shared Preview database as usual.
 
 ## Request-time config injection
 
@@ -104,9 +106,9 @@ Then `check` expects the shared database as usual.
 | `inject`     | `true`                  | Inject the public config into HTML                                                       |
 | `identity`   | `true`                  | Serve `/.well-known/supabase-preview`                                                    |
 
-Why request time: a Preview reuses the build Workers Builds made for its branch. Build-time values such as `VITE_SUPABASE_URL` would bake one database into the bundle, and pointing an isolated PR at its own database would need a second build. Reading the values per request means one build serves any database, and only a secret changes.
+Why request time: a Preview reuses the build Workers Builds made for its branch. Build-time values such as `VITE_SUPABASE_URL` would bake one database into the bundle, and pointing a PR at its own database would need a second build. Reading the values per request means one build serves any database, and only a secret changes.
 
-**The caveat:** code that does `import { env } from "cloudflare:workers"` reads the bindings directly and sees the raw values, not the override. Read Supabase settings from the handler's `env` or from `process.env`. The [framework guides](frameworks/) say where each framework hands you `env`.
+**The caveat:** code that does `import { env } from "cloudflare:workers"` reads the bindings directly and sees the raw values, not the override. Read Supabase settings from the handler's `env` or from `process.env`. The [framework guides](README.md#frameworks) say where each framework hands you `env`.
 
 ## The identity route
 
@@ -194,3 +196,7 @@ These are enforced in code, not by convention:
 - Every command takes `--dry-run`, which prints the wrangler commands and API writes instead of running them. `shared`, `up`, `check`, `down`, `pr` and `prune` still require `SUPABASE_ACCESS_TOKEN` in dry-run (and `GITHUB_TOKEN` for `pr` and `prune`), and the reads still happen (`shared` lists branches; `down` lists branches and Previews; `pr` lists the PR's files and, on the shared path, Previews and branches; `prune` reads everything it plans from).
 
 [Security](security.md) covers what each token can reach.
+
+---
+
+[← Previous: Troubleshooting](troubleshooting.md) · [Docs index](README.md) · [Next: Configuration →](configuration.md)

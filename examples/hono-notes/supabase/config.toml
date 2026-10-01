@@ -1,0 +1,10 @@
+# A trimmed config.toml: the Supabase CLI fills in defaults for everything not set here.
+# The GitHub integration applies this file to each branch database on every push.
+project_id = "hono-notes"
+
+[auth]
+site_url = "http://localhost:8787"
+additional_redirect_urls = [
+  "http://localhost:8787/**",
+  "https://*-hono-notes.<your subdomain>.workers.dev/**",
+]

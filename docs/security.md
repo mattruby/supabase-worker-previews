@@ -1,5 +1,7 @@
 # Security
 
+What `swp` can read and write, the guards that stop it touching production, which values are public, and what a leaked token allows.
+
 ## What `swp` touches
 
 | System                      | Reads                                                                                         | Writes                                                                                                                                                                                                                                          |
@@ -73,3 +75,7 @@ GitHub does not pass repository secrets to `pull_request` workflows from forks (
 ## Reporting a vulnerability
 
 See [SECURITY.md](../SECURITY.md). Open a [GitHub security advisory](https://github.com/mattruby/supabase-worker-previews/security/advisories/new) on the repository rather than a public issue.
+
+---
+
+[← Previous: Tokens](tokens.md) · [Docs index](README.md) · [Next: Compared with Vercel →](vs-vercel.md)

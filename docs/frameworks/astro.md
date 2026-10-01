@@ -1,5 +1,7 @@
 # Astro on Cloudflare Workers
 
+How to wrap an Astro Worker, read Supabase settings so the override applies, and handle prerendered pages.
+
 Astro 6 with `@astrojs/cloudflare` v13 or later. Sources: [Astro: @astrojs/cloudflare](https://docs.astro.build/en/guides/integrations-guide/cloudflare/) (v14.3.3 at the time of writing), [Astro: environment variables](https://docs.astro.build/en/guides/environment-variables/). Cloudflare's own [Astro guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/astro/) still describes the Astro 5 setup (`"main": "./dist/_worker.js/index.js"`, bindings in `locals`), so follow Astro's adapter docs. Checked 2026-09-30.
 
 ## Worker entry
@@ -50,7 +52,7 @@ const myVariable = env.MY_VARIABLE;
 ---
 ```
 
-or through `astro:env/server`. `cloudflare:workers` gives the **raw** values: on an isolated PR, `env.SUPABASE_URL` is still the shared Preview database. Read Supabase settings from `process.env` instead. With `nodejs_compat` and a compatibility date on or after 2025-04-01, Cloudflare populates `process.env` from vars and secrets ([Cloudflare: process](https://developers.cloudflare.com/workers/runtime-apis/nodejs/process/)), and the wrapper writes the override over it at the start of each request:
+or through `astro:env/server`. `cloudflare:workers` gives the **raw** values: on a PR with its own database, `env.SUPABASE_URL` is still the shared Preview database. Read Supabase settings from `process.env` instead. With `nodejs_compat` and a compatibility date on or after 2025-04-01, Cloudflare populates `process.env` from vars and secrets ([Cloudflare: process](https://developers.cloudflare.com/workers/runtime-apis/nodejs/process/)), and the wrapper writes the override over it at the start of each request:
 
 ```astro
 ---
@@ -83,3 +85,7 @@ Use it in a client `<script>` or an island, not in frontmatter (frontmatter runs
 ## Prerendered pages
 
 Astro prerenders pages by default unless they opt into on-demand rendering. Prerendered pages are static assets, served without invoking the Worker unless [`run_worker_first`](https://developers.cloudflare.com/workers/static-assets/binding/#run_worker_first) covers them, so they get no injected config and their client code falls back to build-time `PUBLIC_` values. `swp doctor` warns when the assets directory holds HTML and `run_worker_first` is unset (it checks the top level of the directory only). Either render pages that create a Supabase client on demand, or route them through the Worker with `run_worker_first`.
+
+---
+
+[← Previous: React Router v7](react-router.md) · [Docs index](../README.md) · [Next: Troubleshooting →](../troubleshooting.md)

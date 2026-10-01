@@ -1,6 +1,23 @@
 # Troubleshooting
 
-Start every investigation with:
+Find your symptom below, then follow its cause and fix. Each heading is phrased the way the problem shows up.
+
+- [Signed-in reads fail with 403 or permission denied](#signed-in-reads-fail-with-403-or-permission-denied)
+- [My Preview shows production data](#my-preview-shows-production-data)
+- [My Preview still uses an old database](#my-preview-still-uses-an-old-database)
+- [The Preview database check never passes](#the-preview-database-check-never-passes)
+- [A deleted Preview still loads](#a-deleted-preview-still-loads)
+- [Sign-in links and OAuth redirect to localhost](#sign-in-links-and-oauth-redirect-to-localhost)
+- [A binding or secret is undefined only in Previews](#a-binding-or-secret-is-undefined-only-in-previews)
+- [`swp shared` or `swp up` hangs, then says the branch is not ready](#swp-shared-or-swp-up-hangs-then-says-the-branch-is-not-ready)
+- [Cannot create Supabase branch](#cannot-create-supabase-branch)
+- [The PR check is green but nothing happened](#the-pr-check-is-green-but-nothing-happened)
+- [No PR comment or View deployment button](#no-pr-comment-or-view-deployment-button)
+- [The access token cannot reveal secret API keys](#the-access-token-cannot-reveal-secret-api-keys)
+
+## Start here
+
+Run these first:
 
 ```bash
 npx swp doctor                       # local files, plus the shared branch when SUPABASE_ACCESS_TOKEN is set
@@ -11,7 +28,7 @@ Then confirm with a real browser: open the Preview, sign in, and load a page tha
 
 The platform behaviour cited below was measured and is recorded in [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md).
 
-## Preview 403s on signed-in reads
+## Signed-in reads fail with 403 or permission denied
 
 **Symptom.** The Preview loads and sign-in works, but reads return 403 or `permission denied for table ...`. Production is fine.
 
@@ -34,7 +51,7 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
    - **A PR's branch:** close and reopen the PR. The integration deletes the branch on close and creates it again on reopen. Closing also runs `swp down`, which deletes the Preview, so push a commit afterwards to have Workers Builds recreate it.
    - **The shared `preview` branch:** persistent branches refuse `DELETE`, so first `PATCH /v1/branches/{ref}` with `{"persistent": false}`, then delete it, then run `npx swp shared` again and paste the new `previews.vars`.
 
-## Preview shows production data
+## My Preview shows production data
 
 **Symptom.** A Preview reads or writes production rows.
 
@@ -51,7 +68,7 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
 | The client is created from build-time env, not `readPublicConfig()`                                                                                                                                                                                                                       | grep for `createClient(`                                                                                                                                                                                                                             | Use `readPublicConfig() ?? { ...import.meta.env fallback }`                                                                     |
 | You are on an old `wrangler versions upload --preview-alias` URL, not a Worker Preview                                                                                                                                                                                                    | the hostname is an alias you made by hand                                                                                                                                                                                                            | Old preview aliases cannot be deleted and run with **production** secrets. Do not use them; point a stale one at a stub version |
 
-## Preview still serves an old database
+## My Preview still uses an old database
 
 **Symptom.** `check` reports `last saw <old ref>`, or the Preview keeps reading a database you replaced.
 
@@ -63,11 +80,11 @@ The platform behaviour cited below was measured and is recorded in [gotchas.md](
 - **The PR no longer needs its own database, but its override remains.** `swp pr` removes `SUPABASE_OVERRIDE` (and the branch `up` made) on its next run on the shared path. If the label was removed, that run is triggered by `unlabeled`; a workflow written before that trigger was added needs it in `on.pull_request.types`. Look for `removed SUPABASE_OVERRIDE from Preview <name>; it serves preview again` in the log. By hand: `npx wrangler preview secret delete SUPABASE_OVERRIDE --name <preview> --worker-name <worker>`.
 - **Just recreated.** After a delete and recreate, the hostname served the old version for a few seconds. Wait and re-run `check`.
 
-## Check never passes, or "never deployed"
+## The Preview database check never passes
 
 `check` retries every 20 seconds, 45 times, then fails with:
 
-```
+```text
 The Preview of <branch> never served <want> (<ref>); last saw <seen>
 ```
 
@@ -78,12 +95,12 @@ The Preview of <branch> never served <want> (<ref>); last saw <seen>
 | `HTTP 404` (or another status)                 | The identity route is not served and `checkPath` does not return 200                                                                                                                                                                                                                 | Wrap the Worker, or set `checkPath` to a page that returns 200                                                                           |
 | `no Supabase URL in the page`                  | No identity route, and the page at `checkPath` has no `https://<ref>.supabase.co` URL (for example, a custom API domain)                                                                                                                                                             | Wrap the Worker so the identity route answers                                                                                            |
 | `several databases in the page: ...`           | The fallback page scan found more than one ref                                                                                                                                                                                                                                       | Wrap the Worker, or point `checkPath` at a page that names one database                                                                  |
-| another project ref                            | The Preview serves a different database than expected                                                                                                                                                                                                                                | See [Preview still serves an old database](#preview-still-serves-an-old-database)                                                        |
+| another project ref                            | The Preview serves a different database than expected                                                                                                                                                                                                                                | See [Preview still serves an old database](#my-preview-still-uses-an-old-database)                                                       |
 
 Other errors from `check` and `up`:
 
-- `No Supabase branch for <want> on <ref>`: for the shared case, run `npx swp shared`. For an isolated PR, the integration has not created the branch; check that automatic branching is on and the Supabase directory setting matches `supabaseDir`.
-- `No Preview <name> appeared; is a Preview being deployed for it?`: `up` waited 10 minutes for the Preview. Same fixes as `no Preview yet`.
+- `No Supabase branch for <want> on <ref>`: for the shared case, run `npx swp shared`. For a PR that needs its own database, the integration has not created the branch; check that automatic branching is on and the Supabase directory setting matches `supabaseDir`.
+- `No deployed Preview <name> appeared; is a Preview being deployed for it?`: `up` waited 10 minutes for the Preview to be deployed. Same fixes as `no Preview yet`.
 
 Workers Builds names a Preview after the raw git branch (`feat/x`), and Cloudflare derives the slug (`feat-x`). `swp` matches on the raw name first, then the slug. The dashboard accepted only a literal `npx wrangler preview` as the Preview command when measured; a custom `--name` breaks the match.
 
@@ -97,7 +114,7 @@ If your own CI deploys Previews as `pr-<number>` (Cloudflare's automation exampl
 
 **Fix.** Wait it out; there is no known way to force it. Create Previews by pushing a branch rather than running `wrangler preview` locally.
 
-## Auth redirect goes to localhost
+## Sign-in links and OAuth redirect to localhost
 
 **Symptom.** A magic link, OAuth sign-in or password reset from a Preview lands on `http://localhost:3000` (or whatever `site_url` your `config.toml` has).
 
@@ -122,7 +139,7 @@ If your own CI deploys Previews as `pr-<number>` (Cloudflare's automation exampl
    });
    ```
 
-## A binding is missing in the Preview
+## A binding or secret is undefined only in Previews
 
 **Symptom.** `env.CACHE is undefined`, `env.RATE_LIMITER.limit is not a function`, or an app secret is missing, only in Previews.
 
@@ -132,11 +149,11 @@ If your own CI deploys Previews as `pr-<number>` (Cloudflare's automation exampl
 - **An app secret was added to the base config after the Preview was created.** The Preview kept its original copy. Delete the Preview and push again.
 - **Platform limits on Previews.** Cloudflare documents that a service binding reaches only the production version of the other Worker, Previews cannot consume Queues, and Cron Triggers target production only ([Cloudflare: resources](https://developers.cloudflare.com/workers/previews/resources/)).
 
-## Branch stuck creating
+## `swp shared` or `swp up` hangs, then says the branch is not ready
 
 **Symptom.** `swp shared` or `swp up` logs nothing for minutes, then fails with:
 
-```
+```text
 Supabase branch <ref> not ready after 15 minutes: <have> of <want> migrations, <status>
 ```
 
@@ -151,7 +168,7 @@ or ends at once with `Supabase branch <ref> ended MIGRATIONS_FAILED` (or `FUNCTI
 - **A file in `supabase/migrations/` ends in `.sql` but is not a migration** (a scratch file). Remove it from the folder.
 - **Supabase is slow.** Creation can take several minutes. Re-run the workflow; `up` reuses the existing branch.
 
-## Branch cannot be created
+## Cannot create Supabase branch
 
 `swp up` (and `swp shared`) explain a failed `POST /v1/projects/{ref}/branches` as `Cannot create Supabase branch "<name>": <advice> Supabase said: <status> <body>`:
 
@@ -175,10 +192,18 @@ or ends at once with `Supabase branch <ref> ended MIGRATIONS_FAILED` (or `FUNCTI
 
 On anyone else's PR, empty secrets fail the job with `::error::swp pr cannot check PR #<n>: <NAMES> are empty; add them to the repository's Actions secrets`. Add the named secrets.
 
-## No PR comment or deployment
+## No PR comment or View deployment button
 
 The comment and deployment never fail the job. Look for `::warning::PR comment skipped: ...` or `::warning::GitHub deployment skipped: ...` in the log. A 403 there means the workflow lacks `pull-requests: write` or `deployments: write`; add them under `permissions:` ([tokens](tokens.md#github_token)). Neither is written in `--dry-run`, or when `prComment` / `githubDeployments` is `false` or `--no-comment` / `--no-deployments` is passed.
 
-## Secret API keys are masked
+## The access token cannot reveal secret API keys
 
 `Project <ref>: the access token cannot reveal secret API keys; use a token with the project's secrets permission`: the API returned the secret key masked with `·`, so the token lacks the permission to reveal it. Give it **API Key Secrets: Read** ([tokens](tokens.md#supabase-access-token)).
+
+## Still stuck
+
+Open an [issue](https://github.com/mattruby/supabase-worker-previews/issues/new/choose) with the output of `npx swp doctor` and the failing log. If you found a platform behaviour that disagrees with [gotchas.md](../skills/supabase-worker-previews/references/gotchas.md), say what you ran and what you saw.
+
+---
+
+[← Previous: Astro](frameworks/astro.md) · [Docs index](README.md) · [Next: How it works →](how-it-works.md)

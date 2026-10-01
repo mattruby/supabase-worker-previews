@@ -1,5 +1,7 @@
 # Hono on Cloudflare Workers
 
+How to wrap a Hono Worker and read Supabase settings so the override applies. For a complete project, see [`examples/hono-notes`](../../examples/hono-notes).
+
 Sources: [Cloudflare: Hono](https://developers.cloudflare.com/workers/framework-guides/web-apps/more-web-frameworks/hono/), [Hono: Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers). Checked 2026-09-30.
 
 ## Worker entry
@@ -44,7 +46,7 @@ Add `scheduled`, `queue` or other handlers to the same object; the wrapper hands
 
 Hono passes the Worker's `env` argument to handlers as `c.env`, so `c.env.SUPABASE_URL` **is** the overridden value. This is the documented way to read bindings in Hono; neither guide uses `cloudflare:workers`.
 
-If any module does `import { env } from "cloudflare:workers"`, it sees the raw values (the shared Preview database even on an isolated PR). Read from `c.env`, or from `process.env` under `nodejs_compat`, where the wrapper also writes the override on each request.
+If any module does `import { env } from "cloudflare:workers"`, it sees the raw values (the shared Preview database even on a PR with its own database). Read from `c.env`, or from `process.env` under `nodejs_compat`, where the wrapper also writes the override on each request.
 
 ## Reading the config in the browser
 
@@ -82,3 +84,7 @@ app.get("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 (add `ASSETS: Fetcher` to `Bindings`). The wrapper then injects the config into the HTML that comes back.
 
 **Unverified:** neither guide shows this combination, so it is a sketch rather than a tested recipe; the route patterns are illustrative, so adjust them to your asset paths. Whether a Preview needs `assets` redeclared under `previews` is not documented on the pages checked.
+
+---
+
+[← Previous: TanStack Start](tanstack-start.md) · [Docs index](../README.md) · [Next: React Router v7 →](react-router.md)

@@ -1,5 +1,7 @@
 # Compared with Vercel
 
+How `swp` on Cloudflare compares with Vercel and Supabase's Vercel integration, to help you pick one.
+
 Vercel plus Supabase's Vercel integration is the setup `swp` imitates. Both rely on the same Supabase branching underneath, so database behaviour (migrations, `seed.sql`, `config.toml`, per-hour branch billing) is the same. What differs is how each preview learns its database. Vendor behaviour below is from the cited docs, checked 2026-09-30.
 
 ## What Vercel and the Supabase integration give you
@@ -40,3 +42,7 @@ On the PR, `swp pr` keeps one status comment (Preview link, database, pass or fa
 - the app already runs on Cloudflare Workers, or needs Workers bindings (KV, D1, R2, Durable Objects, Queues);
 - you want every Preview on a known non-production database, with CI that fails if it is not;
 - you want one build to serve any database.
+
+---
+
+[← Previous: Security](security.md) · [Docs index](README.md)

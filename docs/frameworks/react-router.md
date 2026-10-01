@@ -1,5 +1,7 @@
 # React Router v7 on Cloudflare Workers
 
+How to wrap a React Router v7 Worker and read Supabase settings so the override applies.
+
 Framework mode. Sources: [Cloudflare: React Router](https://developers.cloudflare.com/workers/framework-guides/web-apps/react-router/). React Router's own [deploying page](https://reactrouter.com/start/framework/deploying) links to Cloudflare's template rather than documenting Workers itself. Checked 2026-09-30.
 
 ## Worker entry
@@ -76,3 +78,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 Create the client in browser code only (for example in a module imported from `clientLoader` or an effect). During server rendering there is no `window.__SUPABASE_PUBLIC__`; `readPublicConfig()` returns `null` there and the fallback would read build-time values. Server code should use `context.cloudflare.env`.
 
 **Unverified:** the Cloudflare guide does not mention `VITE_` client variables; the fallback relies on Vite's standard behaviour. Server-rendered HTML passes through the Worker, so it is injected; if you prerender routes to static assets, those pages are served without the Worker (see [`run_worker_first`](https://developers.cloudflare.com/workers/static-assets/binding/#run_worker_first)). Not checked: whether hydrating a document that React Router renders from `<html>` down reports the injected `<head>` script as a mismatch.
+
+---
+
+[← Previous: Hono](hono.md) · [Docs index](../README.md) · [Next: Astro →](astro.md)

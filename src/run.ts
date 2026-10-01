@@ -30,14 +30,21 @@ export function makeRunner(dryRun: boolean, log: (line: string) => void = consol
       if (res.error) throw res.error;
       if (res.status !== 0) {
         const tail = opts?.captureStderr ? (res.stderr ?? "").trim().split("\n").slice(-8).join("\n") : "";
-        throw new Error(`${cmd} exited ${res.status}${tail ? `:\n${tail}` : ""}`);
+        throw new Error(`\`${shown}\` exited ${res.status}${tail ? `:\n${tail}` : ""}`);
       }
       return res.stdout ?? "";
     },
   };
 }
 
-export function parseArgs(argv: string[]): {
+/**
+ * `--flag value`, `--flag=value` and bare `--flag`. A flag in `booleans` never
+ * takes the next argument, so `swp --dry-run up` keeps `up` as the command.
+ */
+export function parseArgs(
+  argv: string[],
+  booleans: ReadonlySet<string> = new Set(),
+): {
   positional: string[];
   flags: Record<string, string | true>;
 } {
@@ -45,28 +52,19 @@ export function parseArgs(argv: string[]): {
   const flags: Record<string, string | true> = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]!;
-    if (!a.startsWith("--")) {
-      positional.push(a);
-      continue;
+    if (a === "-h") flags.help = true;
+    else if (a === "-v") flags.version = true;
+    else if (!a.startsWith("--")) positional.push(a);
+    else {
+      const eq = a.indexOf("=");
+      const k = eq === -1 ? a.slice(2) : a.slice(2, eq);
+      const next = argv[i + 1];
+      if (eq !== -1) flags[k] = a.slice(eq + 1);
+      else if (!booleans.has(k) && next !== undefined && !next.startsWith("-")) flags[k] = argv[++i]!;
+      else flags[k] = true;
     }
-    const [k, v] = a.slice(2).split("=", 2) as [string, string | undefined];
-    const next = argv[i + 1];
-    if (v !== undefined) flags[k] = v;
-    else if (next !== undefined && !next.startsWith("--")) flags[k] = argv[++i]!;
-    else flags[k] = true;
   }
   return { positional, flags };
-}
-
-/** Exit code when usage is all there is to print: 0 when asked for help, 2 with no arguments at all. */
-export function usageExitCode(
-  positional: string[],
-  flags: Record<string, string | true>,
-): number | undefined {
-  const command = positional[0];
-  if (command === "help" || flags.help) return 0;
-  if (!command) return 2;
-  return undefined;
 }
 
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { Config } from "../config.js";
 import { Feedback, type FeedbackDeps } from "../feedback.js";
+import { apiErrorMessage } from "../http.js";
 import { check, down, release, up } from "./branches.js";
 
 export type PullRequestEvent = {
@@ -14,7 +15,10 @@ export type PullRequestEvent = {
 };
 
 export function readEvent(path = process.env.GITHUB_EVENT_PATH): PullRequestEvent {
-  if (!path) throw new Error("GITHUB_EVENT_PATH is not set; `swp pr` runs inside a pull_request workflow");
+  if (!path)
+    throw new Error(
+      "GITHUB_EVENT_PATH is not set: `swp pr` runs inside a pull_request workflow. To try one branch here, use `swp up` or `swp check`.",
+    );
   const event = JSON.parse(readFileSync(path, "utf8")) as PullRequestEvent;
   if (!event.pull_request) throw new Error("`swp pr` needs a pull_request event");
   return event;
@@ -69,7 +73,10 @@ export async function changedFiles(
       `https://api.github.com/repos/${event.repository.full_name}/pulls/${event.number}/files?per_page=100&page=${page}`,
       { headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" } },
     );
-    if (!res.ok) throw new Error(`GitHub PR files: ${res.status} ${await res.text()}`);
+    if (!res.ok)
+      throw new Error(
+        apiErrorMessage("GitHub API GET PR files", res.status, await res.text(), "GITHUB_TOKEN"),
+      );
     const batch = (await res.json()) as { filename: string; previous_filename?: string }[];
     for (const f of batch) files.push(f.filename, ...(f.previous_filename ? [f.previous_filename] : []));
     if (batch.length < 100) return files;

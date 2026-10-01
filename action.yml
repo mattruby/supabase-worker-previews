@@ -56,8 +56,8 @@ runs:
       run: |
         set -euo pipefail
         flags=()
-        if [ "$SWP_COMMENT" = "false" ]; then flags+=(--no-comment); fi
-        if [ "$SWP_DEPLOYMENTS" = "false" ]; then flags+=(--no-deployments); fi
+        if [ "$SWP_COMMAND" = "pr" ] && [ "$SWP_COMMENT" = "false" ]; then flags+=(--no-comment); fi
+        if [ "$SWP_COMMAND" = "pr" ] && [ "$SWP_DEPLOYMENTS" = "false" ]; then flags+=(--no-deployments); fi
         if npx --no-install swp help >/dev/null 2>&1; then
           swp=(npx --no-install swp)
         else

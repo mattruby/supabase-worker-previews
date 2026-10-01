@@ -1,4 +1,5 @@
 import type { PreviewRecord } from "../cloudflare.js";
+import { apiErrorMessage } from "../http.js";
 import type { Config } from "../config.js";
 import { previewName } from "../preview-name.js";
 import type { Branch } from "../supabase.js";
@@ -13,7 +14,8 @@ async function github<T>(path: string, token: string, fetchImpl: typeof fetch): 
   const res = await fetchImpl(`https://api.github.com/repos/${path}`, {
     headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
   });
-  if (!res.ok) throw new Error(`GitHub ${path}: ${res.status} ${await res.text()}`);
+  if (!res.ok)
+    throw new Error(apiErrorMessage(`GitHub API GET ${path}`, res.status, await res.text(), "GITHUB_TOKEN"));
   return (await res.json()) as T;
 }
 

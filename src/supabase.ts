@@ -1,3 +1,5 @@
+import { apiErrorMessage } from "./http.js";
+
 const API = "https://api.supabase.com/v1";
 
 export type Branch = {
@@ -31,7 +33,7 @@ export class SupabaseApiError extends Error {
     readonly status: number,
     readonly body: string,
   ) {
-    super(`Supabase API ${method} ${path}: ${status} ${body}`);
+    super(apiErrorMessage(`Supabase API ${method} ${path}`, status, body, "SUPABASE_ACCESS_TOKEN"));
   }
 }
 

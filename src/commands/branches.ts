@@ -29,6 +29,13 @@ export async function branchFor(gitBranch: string, deps: Deps): Promise<Branch |
   return branches.find((b) => b.git_branch === gitBranch && !b.is_default);
 }
 
+/** The Preview a git branch deploys to: named after the branch, or `pr-<number>` when configured. */
+export function previewKey(gitBranch: string, config: Config, pr?: number): string {
+  if (config.previewName === "branch") return gitBranch;
+  if (pr === undefined) throw new Error(`previewName is "pr", so pass the PR number (--pr <n>)`);
+  return `pr-${pr}`;
+}
+
 /** Never repoint, write to or delete the production project through a branch record. */
 export function assertIsolated(branch: Branch, parent: string): void {
   if (branch.is_default || branch.project_ref === parent) {
@@ -129,7 +136,7 @@ export async function enableBranching(deps: Deps): Promise<void> {
  * one for any PR that changes supabase/; for other branches this asks for one,
  * which Supabase still migrates and seeds from that git branch.
  */
-export async function up(gitBranch: string, deps: Deps): Promise<string> {
+export async function up(gitBranch: string, deps: Deps, pr?: number): Promise<string> {
   const { config, runner, supabase } = deps;
   runner.log(`Isolated database for ${gitBranch}`);
   if (runner.dryRun) {
@@ -143,7 +150,7 @@ export async function up(gitBranch: string, deps: Deps): Promise<string> {
   assertIsolated(branch, config.supabaseProjectRef);
   const ref = branch.project_ref;
   await waitForMigrations(ref, deps);
-  const preview = await waitForPreview(gitBranch, deps);
+  const preview = await waitForPreview(previewKey(gitBranch, config, pr), deps);
   const url = previewUrlOf(preview);
   await supabase.allowRedirects(ref, url, [`${url}/**`]);
   deps.cloudflare.putPreviewSecrets(preview.name, {
@@ -175,7 +182,7 @@ export async function servedRef(baseUrl: string, deps: Deps): Promise<{ ref?: st
  * when isolated, else the shared one. Production fails at once; anything
  * else is retried while Workers Builds and `up` finish.
  */
-export async function check(gitBranch: string, isolated: boolean, deps: Deps): Promise<void> {
+export async function check(gitBranch: string, isolated: boolean, deps: Deps, pr?: number): Promise<void> {
   const { config, runner, supabase } = deps;
   const parent = config.supabaseProjectRef;
   const want = isolated ? `the branch for ${gitBranch}` : config.sharedBranch;
@@ -190,7 +197,7 @@ export async function check(gitBranch: string, isolated: boolean, deps: Deps): P
   assertIsolated(expected, parent);
   let seen = "nothing yet";
   for (let attempt = 1; attempt <= 45; attempt += 1) {
-    const preview = await deps.cloudflare.findPreview(gitBranch);
+    const preview = await deps.cloudflare.findPreview(previewKey(gitBranch, config, pr));
     if (!preview) seen = "no Preview yet";
     else if (!preview.deployed_on) seen = `Preview ${preview.slug} exists but was never deployed`;
     else {
@@ -211,7 +218,7 @@ export async function check(gitBranch: string, isolated: boolean, deps: Deps): P
 }
 
 /** Removes the Preview and, if the integration has not already, its own database. */
-export async function down(gitBranch: string, deps: Deps): Promise<void> {
+export async function down(gitBranch: string, deps: Deps, pr?: number): Promise<void> {
   const { config, runner } = deps;
   runner.log(`Removing the Preview of ${gitBranch} and any database of its own`);
   const branch = await branchFor(gitBranch, deps);
@@ -224,21 +231,21 @@ export async function down(gitBranch: string, deps: Deps): Promise<void> {
     await deps.supabase.deleteBranch(branch.project_ref);
     runner.log(`  Supabase branch ${branch.name} deleted`);
   }
-  const preview = await deps.cloudflare.findPreview(gitBranch);
+  const preview = await deps.cloudflare.findPreview(previewKey(gitBranch, config, pr));
   if (!preview) runner.log(`  no Preview to delete`);
   else if (runner.dryRun) runner.log(`  delete Preview ${preview.name}`);
   else deps.cloudflare.deletePreview(preview.name);
 }
 
 /** On a PR's first push, Workers Builds may still be creating the Preview. */
-async function waitForPreview(gitBranch: string, deps: Deps): Promise<PreviewRecord> {
+async function waitForPreview(name: string, deps: Deps): Promise<PreviewRecord> {
   for (let attempt = 1; attempt <= 30; attempt += 1) {
-    const preview = await deps.cloudflare.findPreview(gitBranch);
+    const preview = await deps.cloudflare.findPreview(name);
     if (preview) return preview;
-    deps.runner.log(`  waiting for the Preview of ${gitBranch} to exist (${attempt})`);
+    deps.runner.log(`  waiting for the Preview ${name} to exist (${attempt})`);
     await deps.sleep(20_000);
   }
-  throw new Error(`No Preview of ${gitBranch} appeared; is Workers Builds building this branch?`);
+  throw new Error(`No Preview ${name} appeared; is a Preview being deployed for it?`);
 }
 
 function previewUrlOf(preview: PreviewRecord): string {

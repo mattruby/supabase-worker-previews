@@ -15,9 +15,9 @@ const USAGE = `swp: branch previews for Cloudflare Workers on Supabase branching
   swp init [--project-ref <ref>] [--trunk <branch>]   scaffold config, grants migration, workflow
   swp doctor                                          check the setup, offline and (with tokens) online
   swp shared                                          create or repair the shared Preview database
-  swp up    [--branch <b>]                            give a branch's Preview its own database
-  swp check [--branch <b>] [--isolated]               fail unless the Preview serves the right database
-  swp down  [--branch <b>]                            delete the Preview and its own database
+  swp up    [--branch <b>] [--pr <n>]                 give a branch's Preview its own database
+  swp check [--branch <b>] [--pr <n>] [--isolated]    fail unless the Preview serves the right database
+  swp down  [--branch <b>] [--pr <n>]                 delete the Preview and its own database
   swp pr                                              all of the above for a pull_request workflow
 
 Flags: --dry-run, --env-file <path>, --worker <name>, --project-ref <ref>, --trunk <branch>
@@ -38,6 +38,13 @@ function env(name: string, dryRun = false): string {
 
 function str(v: string | true | undefined): string | undefined {
   return typeof v === "string" ? v : undefined;
+}
+
+function prNumber(flag: string | true | undefined): number | undefined {
+  if (flag === undefined) return undefined;
+  const n = Number(flag);
+  if (!Number.isInteger(n) || n <= 0) throw new Error("--pr takes a pull request number");
+  return n;
 }
 
 function report(findings: Finding[]): boolean {
@@ -96,13 +103,13 @@ async function main(argv: string[]): Promise<number> {
       await shared(deps);
       return 0;
     case "up":
-      await up(currentBranch(flags.branch), deps);
+      await up(currentBranch(flags.branch), deps, prNumber(flags.pr));
       return 0;
     case "check":
-      await check(currentBranch(flags.branch), flags.isolated === true, deps);
+      await check(currentBranch(flags.branch), flags.isolated === true, deps, prNumber(flags.pr));
       return 0;
     case "down":
-      await down(currentBranch(flags.branch), deps);
+      await down(currentBranch(flags.branch), deps, prNumber(flags.pr));
       return 0;
     case "pr":
       await pr(readEvent(), { ...deps, githubToken: env("GITHUB_TOKEN") });

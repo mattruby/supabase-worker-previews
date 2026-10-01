@@ -96,6 +96,7 @@ describe("doctor", () => {
     supabaseDir: "supabase",
     isolatedLabel: "isolated-db",
     checkPath: "/",
+    previewName: "branch",
     apiKeys: "legacy",
   };
   const levels = (dir: string) => checkLocal(config, dir).map((f) => `${f.level}: ${f.message}`);

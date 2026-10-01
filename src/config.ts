@@ -22,6 +22,8 @@ export type Config = {
   isolatedLabel: string;
   /** Path `check` fetches when the Worker does not serve the identity route. */
   checkPath: string;
+  /** How Previews are named: after the raw git branch (Workers Builds), or `pr-<number>`. */
+  previewName: "branch" | "pr";
   /** Which Supabase API keys to hand a Preview when a project has both kinds. */
   apiKeys: "legacy" | "new";
 };
@@ -34,10 +36,11 @@ const DEFAULTS = {
   supabaseDir: "supabase",
   isolatedLabel: "isolated-db",
   checkPath: "/",
+  previewName: "branch",
   apiKeys: "legacy",
 };
 
-const CHOICES = { apiKeys: ["legacy", "new"] } as const;
+const CHOICES = { previewName: ["branch", "pr"], apiKeys: ["legacy", "new"] } as const;
 
 export function readWranglerConfig(cwd = process.cwd()): WranglerConfig | null {
   const file = WRANGLER_FILES.find((f) => existsSync(join(cwd, f)));

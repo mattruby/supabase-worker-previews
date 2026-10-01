@@ -6,6 +6,7 @@ import {
   check,
   down,
   enableBranching,
+  previewKey,
   servedRef,
   shared,
   up,
@@ -28,6 +29,7 @@ const config: Config = {
   supabaseDir: "supabase",
   isolatedLabel: "isolated-db",
   checkPath: "/",
+  previewName: "branch",
   apiKeys: "legacy",
 };
 
@@ -330,6 +332,41 @@ describe("waitForMigrations", () => {
     await expect(waitForMigrations(OWN, deps(s.supabase, fakeCloudflare().cloudflare))).rejects.toThrow(
       /MIGRATIONS_FAILED/,
     );
+  });
+});
+
+describe("previewName pr", () => {
+  const prConfig: Config = { ...config, previewName: "pr" };
+  const own: Branch = { id: "2", name: "feat/x", project_ref: OWN, git_branch: "feat/x", status: "" };
+  const previews = () => [record("feat/x"), record("pr-12")];
+
+  it("names the Preview after the PR, or after the branch by default", () => {
+    expect(previewKey("feat/x", config, 12)).toBe("feat/x");
+    expect(previewKey("feat/x", prConfig, 12)).toBe("pr-12");
+    expect(() => previewKey("feat/x", prConfig)).toThrow(/--pr/);
+  });
+
+  it("gives pr-<n> the override while the database stays tied to the git branch", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const c = fakeCloudflare(previews());
+    await up("feat/x", deps(s.supabase, c.cloudflare, { config: prConfig }), 12);
+    expect(s.log.created).toEqual([{ name: "feat/x", gitBranch: "feat/x" }]);
+    expect(c.calls.preview.map((p) => p.name)).toEqual(["pr-12"]);
+  });
+
+  it("checks and deletes pr-<n>", async () => {
+    const seen: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      seen.push(url);
+      return Response.json({ projectRef: OWN });
+    }) as unknown as typeof fetch;
+    const s = fakeSupabase([main, sharedBranch, own]);
+    const c = fakeCloudflare(previews());
+    await check("feat/x", true, deps(s.supabase, c.cloudflare, { config: prConfig, fetchImpl }), 12);
+    expect(seen[0]).toMatch(/^https:\/\/pr-12-app/);
+    await down("feat/x", deps(s.supabase, c.cloudflare, { config: prConfig }), 12);
+    expect(c.calls.deleted).toEqual(["pr-12"]);
+    expect(s.log.deleted).toEqual([OWN]);
   });
 });
 

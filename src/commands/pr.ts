@@ -43,12 +43,12 @@ export function needsIsolatedDb(event: PullRequestEvent, files: string[], config
 /** One entry point for a pull_request workflow: clean up on close, otherwise point and prove. */
 export async function pr(event: PullRequestEvent, deps: Deps & { githubToken: string }): Promise<void> {
   const branch = event.pull_request.head.ref;
-  if (event.action === "closed") return down(branch, deps);
+  if (event.action === "closed") return down(branch, deps, event.number);
   const files = await changedFiles(event, deps.githubToken, deps.fetchImpl);
   const isolated = needsIsolatedDb(event, files, deps.config);
   deps.runner.log(
     `PR #${event.number} (${branch}): ${isolated ? "its own database" : `the shared "${deps.config.sharedBranch}" database`}`,
   );
-  if (isolated) await up(branch, deps);
-  await check(branch, isolated, deps);
+  if (isolated) await up(branch, deps, event.number);
+  await check(branch, isolated, deps, event.number);
 }

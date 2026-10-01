@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse as parseToml } from "smol-toml";
 import { parseJsonc } from "./jsonc.js";
 
 export const CONFIG_FILE = "swp.config.json";
@@ -23,7 +24,7 @@ export type Config = {
   checkPath: string;
 };
 
-export type WranglerConfig = { file: string; json: Record<string, unknown> | null; name?: string };
+export type WranglerConfig = { file: string; json: Record<string, unknown>; name?: string };
 
 const DEFAULTS = {
   trunk: "main",
@@ -37,10 +38,12 @@ export function readWranglerConfig(cwd = process.cwd()): WranglerConfig | null {
   const file = WRANGLER_FILES.find((f) => existsSync(join(cwd, f)));
   if (!file) return null;
   const text = readFileSync(join(cwd, file), "utf8");
-  if (file.endsWith(".toml")) {
-    return { file, json: null, name: /^\s*name\s*=\s*"([^"]+)"/m.exec(text)?.[1] };
+  let json: Record<string, unknown>;
+  try {
+    json = (file.endsWith(".toml") ? parseToml(text) : parseJsonc(text)) as Record<string, unknown>;
+  } catch (err) {
+    throw new Error(`Cannot parse ${file}: ${(err as Error).message}`);
   }
-  const json = parseJsonc(text) as Record<string, unknown>;
   return { file, json, name: typeof json.name === "string" ? json.name : undefined };
 }
 

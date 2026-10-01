@@ -62,6 +62,20 @@ describe("loadConfig", () => {
   it("requires the production project", () => {
     expect(() => loadConfig({}, project({ "wrangler.json": wrangler(null) }))).toThrow(/supabaseProjectRef/);
   });
+
+  it("reads the worker name from wrangler.toml", () => {
+    const dir = project({
+      "wrangler.toml": `# the worker\nname = "toml-app"\nmain = "src/worker.ts"\n`,
+      "swp.config.json": JSON.stringify({ supabaseProjectRef: PARENT }),
+    });
+    expect(loadConfig({}, dir).worker).toBe("toml-app");
+  });
+
+  it("names the wrangler config it cannot parse", () => {
+    expect(() => loadConfig({}, project({ "wrangler.toml": `name = "app` }))).toThrow(
+      /Cannot parse wrangler.toml/,
+    );
+  });
 });
 
 describe("doctor", () => {
@@ -114,6 +128,62 @@ describe("doctor", () => {
     expect(out).toMatch(/warn: "ratelimits" is bound at the top level/);
     expect(out).toMatch(/error: the first migration/);
     expect(out).toMatch(/warn: supabase\/config.toml/);
+  });
+
+  it("passes a complete wrangler.toml setup", () => {
+    const dir = project({
+      "node_modules/wrangler/package.json": JSON.stringify({ version: "4.145.0" }),
+      "wrangler.toml": `name = "app"
+
+[vars]
+APP_NAME = "x"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "abc"
+
+[previews.vars]
+SUPABASE_URL = "https://sharedrefsharedref00.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "k"
+APP_NAME = "x"
+
+[[previews.kv_namespaces]]
+binding = "CACHE"
+id = "abc"
+`,
+      "supabase/migrations/20260101000000_grants.sql": GRANTS,
+    });
+    expect(levels(dir).filter((l) => !l.startsWith("ok"))).toEqual([]);
+    expect(levels(dir)).toContain("ok: previews.vars uses sharedrefsharedref00");
+  });
+
+  it("checks the previews block, its vars and bindings in wrangler.toml", () => {
+    const dir = project({
+      "wrangler.toml": `name = "app"
+
+[vars]
+APP_NAME = "x"
+
+[[ratelimits]]
+name = "LIMITER"
+
+[previews.vars]
+SUPABASE_URL = "https://${PARENT}.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "k"
+SUPABASE_OVERRIDE = "{}"
+`,
+    });
+    const out = levels(dir).join("\n");
+    expect(out).toMatch(/error: previews.vars points at the production project/);
+    expect(out).toMatch(/error: previews.vars holds SUPABASE_OVERRIDE/);
+    expect(out).toMatch(/warn: "ratelimits" is bound at the top level/);
+    expect(out).toMatch(/warn: vars missing from previews.vars: APP_NAME/);
+    expect(out).not.toMatch(/TOML/);
+  });
+
+  it("reports a wrangler.toml without a previews block", () => {
+    const dir = project({ "wrangler.toml": `name = "app"\n` });
+    expect(levels(dir).join("\n")).toMatch(/error: wrangler.toml has no "previews" block/);
   });
 
   it("recognises the grants migration", () => {

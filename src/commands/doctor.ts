@@ -52,8 +52,6 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
 
   const wrangler = readWranglerConfig(cwd);
   if (!wrangler) error("no wrangler.jsonc, wrangler.json or wrangler.toml");
-  else if (!wrangler.json)
-    warn(`${wrangler.file}: TOML is not checked; use wrangler.jsonc to have the previews block verified`);
   else {
     const previews = wrangler.json.previews as Record<string, unknown> | undefined;
     if (!previews) error(`${wrangler.file} has no "previews" block, so Previews get no Supabase settings`);
@@ -131,7 +129,7 @@ export async function checkRemote(
       level: "error",
       message: `"${config.sharedBranch}" tracks ${shared.git_branch ?? "no git branch"}, not ${config.trunk}`,
     });
-  const vars = (readWranglerConfig(cwd)?.json?.previews as { vars?: Record<string, string> } | undefined)
+  const vars = (readWranglerConfig(cwd)?.json.previews as { vars?: Record<string, string> } | undefined)
     ?.vars;
   const varsRef = projectRefOf(vars?.SUPABASE_URL);
   if (varsRef && varsRef !== shared.project_ref)

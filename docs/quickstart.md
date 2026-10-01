@@ -193,7 +193,7 @@ permissions:
   deployments: write # the GitHub deployment
 ```
 
-If a secret is missing, `swp pr` does not fail: it prints a `::warning::` naming the empty secrets and exits 0, so check the job log the first time.
+If a secret is missing, `swp pr` fails with an `::error::` naming the empty secrets (a bot's PR, such as Dependabot's, only gets a `::warning::`).
 
 To run the published GitHub Action instead of the installed CLI, replace the setup-node, `npm ci` and `npx swp pr` steps with:
 

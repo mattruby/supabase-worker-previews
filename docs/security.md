@@ -68,7 +68,7 @@ Restrict it to one account. Cloudflare tokens can also be limited by client IP a
 
 ## Fork PRs
 
-GitHub does not pass repository secrets to `pull_request` workflows from forks ([GitHub: using secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)), so the template workflow cannot leak your tokens to a fork's code. `swp pr` skips fork PRs (head repository differs from the base, or was deleted) with a `::notice::`, and runs with any secret empty with a `::warning::`, both before it creates any API client; the job exits 0. Do not switch the workflow to `pull_request_target` to make fork PRs work: that runs with your secrets on a checkout of untrusted code.
+GitHub does not pass repository secrets to `pull_request` workflows from forks ([GitHub: using secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)), so the template workflow cannot leak your tokens to a fork's code. `swp pr` skips fork PRs (head repository differs from the base, or was deleted) with a `::notice::`, and exits 0; a run with any secret empty stops with an `::error::` (or a `::warning::` for a bot's PR), in both cases before it creates any API client. Do not switch the workflow to `pull_request_target` to make fork PRs work: that runs with your secrets on a checkout of untrusted code.
 
 ## Reporting a vulnerability
 

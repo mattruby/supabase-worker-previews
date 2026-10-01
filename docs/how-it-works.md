@@ -137,7 +137,7 @@ Supabase reports a branch as `FUNCTIONS_DEPLOYED` before its migrations finish. 
 
 In a `pull_request` workflow it reads the event and:
 
-- first, skips the run if the PR comes from a fork (or a deleted fork), with a `::notice::`, or if any of `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` or `GITHUB_TOKEN` is empty, with a `::warning::` naming them. Both exit 0. GitHub gives fork PRs no secrets, so failing them would only make every outside contribution red;
+- first, skips the run if the PR comes from a fork (or a deleted fork), with a `::notice::`, and handles empty `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` or `GITHUB_TOKEN`: a bot's PR (actor ending in `[bot]`, such as Dependabot, which gets no Actions secrets) is skipped with a `::warning::`, anyone else's fails with an `::error::` naming them. GitHub gives fork PRs no secrets, so failing them would only make every outside contribution red, while a person's PR without secrets means the repo is misconfigured;
 - on `closed`: runs `down` (deletes the PR's own Supabase branch unless it is persistent, then the Preview);
 - otherwise: lists the PR's changed files through the GitHub API (including the old path of renamed files), decides the PR is isolated if any path starts with `supabaseDir/` or the PR has the `isolatedLabel` label, runs `up` when isolated or `release` when not, then `check`.
 

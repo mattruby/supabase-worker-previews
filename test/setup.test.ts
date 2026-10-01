@@ -351,16 +351,26 @@ describe("skipReason", () => {
     expect(skipReason(event(null), env)?.message).toMatch(/a deleted fork/);
   });
 
-  it("skips with a warning naming the empty secrets", () => {
+  it("fails a person's PR whose secrets are empty, naming them", () => {
     const skip = skipReason(event({ full_name: "o/r" }), {
       ...env,
+      GITHUB_ACTOR: "someone",
       SUPABASE_ACCESS_TOKEN: "",
       CLOUDFLARE_ACCOUNT_ID: undefined,
     });
     expect(skip).toEqual({
-      level: "warning",
-      message: expect.stringMatching(/SUPABASE_ACCESS_TOKEN, CLOUDFLARE_ACCOUNT_ID are empty/),
+      level: "error",
+      message: expect.stringMatching(/cannot check .*SUPABASE_ACCESS_TOKEN, CLOUDFLARE_ACCOUNT_ID are empty/),
     });
+  });
+
+  it("only warns for a bot PR without secrets", () => {
+    const skip = skipReason(event({ full_name: "o/r" }), {
+      ...env,
+      GITHUB_ACTOR: "dependabot[bot]",
+      SUPABASE_ACCESS_TOKEN: "",
+    });
+    expect(skip?.level).toBe("warning");
   });
 
   it("formats a single-line Actions annotation", () => {

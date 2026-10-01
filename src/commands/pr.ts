@@ -27,9 +27,12 @@ export const PR_ENV = [
   "GITHUB_TOKEN",
 ];
 
-export type Skip = { level: "notice" | "warning"; message: string };
+export type Skip = { level: "notice" | "warning" | "error"; message: string };
 
-/** A fork PR, or a run without its secrets, is skipped with a GitHub Actions annotation rather than failed. */
+/**
+ * A fork PR, or a bot PR without secrets (Dependabot gets none), is skipped with an annotation.
+ * Anyone else's PR without secrets fails, so a misconfigured repo never shows a green check.
+ */
 export function skipReason(
   event: PullRequestEvent,
   env: Record<string, string | undefined> = process.env,
@@ -41,11 +44,13 @@ export function skipReason(
       message: `swp pr skipped PR #${event.number}: it comes from ${head ? `the fork ${head.full_name}` : "a deleted fork"}, and GitHub Actions gives fork PRs no secrets`,
     };
   const missing = PR_ENV.filter((name) => !env[name]);
-  if (missing.length)
+  if (missing.length) {
+    const bot = env.GITHUB_ACTOR?.endsWith("[bot]") ?? false;
     return {
-      level: "warning",
-      message: `swp pr skipped PR #${event.number}: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} empty; add ${missing.length === 1 ? "it" : "them"} to the repository's Actions secrets`,
+      level: bot ? "warning" : "error",
+      message: `swp pr ${bot ? "skipped" : "cannot check"} PR #${event.number}: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} empty; add ${missing.length === 1 ? "it" : "them"} to the repository's Actions secrets`,
     };
+  }
   return null;
 }
 

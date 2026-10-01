@@ -171,7 +171,9 @@ or ends at once with `Supabase branch <ref> ended MIGRATIONS_FAILED` (or `FUNCTI
 `swp pr` exits 0 without doing anything, and says why in an annotation, in two cases:
 
 - `::notice::swp pr skipped PR #<n>: it comes from the fork <owner/repo>, and GitHub Actions gives fork PRs no secrets`. Expected; there is nothing to fix.
-- `::warning::swp pr skipped PR #<n>: <NAMES> are empty; add them to the repository's Actions secrets`. Add the named secrets.
+- `::warning::swp pr skipped PR #<n>: <NAMES> are empty; ...` on a bot's PR (Dependabot gets no Actions secrets). Expected for bots.
+
+On anyone else's PR, empty secrets fail the job with `::error::swp pr cannot check PR #<n>: <NAMES> are empty; add them to the repository's Actions secrets`. Add the named secrets.
 
 ## No PR comment or deployment
 

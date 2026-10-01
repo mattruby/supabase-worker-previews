@@ -92,7 +92,7 @@ async function main(argv: string[]): Promise<number> {
   const skip = event && skipReason(event);
   if (skip) {
     console.log(annotation(skip));
-    return 0;
+    return skip.level === "error" ? 1 : 0;
   }
 
   const dryRun = flags["dry-run"] === true;

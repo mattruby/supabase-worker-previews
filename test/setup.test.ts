@@ -9,6 +9,7 @@ import { init, timestampBefore } from "../src/commands/init.js";
 import { annotation, needsIsolatedDb, skipReason, type PullRequestEvent } from "../src/commands/pr.js";
 import { parseJsonc } from "../src/jsonc.js";
 import { previewName } from "../src/preview-name.js";
+import { parseArgs, usageExitCode } from "../src/run.js";
 
 const PARENT = "parentrefparentref00";
 const GRANTS = readFileSync(join(import.meta.dirname, "..", "templates", "default-privileges.sql"), "utf8");
@@ -346,5 +347,20 @@ describe("skipReason", () => {
 
   it("formats a single-line Actions annotation", () => {
     expect(annotation({ level: "warning", message: "50% done\nnext" })).toBe("::warning::50%25 done%0Anext");
+  });
+});
+
+describe("usageExitCode", () => {
+  const code = (...argv: string[]) => {
+    const { positional, flags } = parseArgs(argv);
+    return usageExitCode(positional, flags);
+  };
+
+  it("exits 0 when asked for help and 2 with no arguments", () => {
+    expect(code("--help")).toBe(0);
+    expect(code("help")).toBe(0);
+    expect(code("doctor", "--help")).toBe(0);
+    expect(code()).toBe(2);
+    expect(code("doctor")).toBeUndefined();
   });
 });

@@ -8,7 +8,7 @@ import { checkLocal, checkRemote, type Finding } from "./commands/doctor.js";
 import { init } from "./commands/init.js";
 import { prune } from "./commands/prune.js";
 import { annotation, pr, readEvent, skipReason } from "./commands/pr.js";
-import { makeRunner, parseArgs, sleep } from "./run.js";
+import { makeRunner, parseArgs, sleep, usageExitCode } from "./run.js";
 import { SupabaseApi } from "./supabase.js";
 
 const USAGE = `swp: branch previews for Cloudflare Workers on Supabase branching
@@ -58,9 +58,10 @@ function report(findings: Finding[]): boolean {
 async function main(argv: string[]): Promise<number> {
   const { positional, flags } = parseArgs(argv);
   const command = positional[0];
-  if (!command || flags.help || command === "help") {
+  const usageCode = usageExitCode(positional, flags);
+  if (usageCode !== undefined) {
     console.log(USAGE);
-    return command ? 0 : 2;
+    return usageCode;
   }
   const envFile = str(flags["env-file"]) ?? (existsSync(".env.swp") ? ".env.swp" : undefined);
   if (envFile) process.loadEnvFile(envFile);

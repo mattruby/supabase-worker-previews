@@ -58,4 +58,15 @@ export function parseArgs(argv: string[]): {
   return { positional, flags };
 }
 
+/** Exit code when usage is all there is to print: 0 when asked for help, 2 with no arguments at all. */
+export function usageExitCode(
+  positional: string[],
+  flags: Record<string, string | true>,
+): number | undefined {
+  const command = positional[0];
+  if (command === "help" || flags.help) return 0;
+  if (!command) return 2;
+  return undefined;
+}
+
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));

@@ -28,7 +28,7 @@ const WITH_GITHUB = [...TOKENS, "GITHUB_TOKEN"];
 
 const DRY_RUN: Flag = { name: "dry-run", help: "Print the plan; change nothing" };
 const OVERRIDES: Flag[] = [
-  { name: "env-file", value: "<path>", help: "Load tokens from this file (default: .env.swp when present)" },
+  { name: "dotenv", value: "<path>", help: "Load tokens from this file (default: .env.swp when present)" },
   { name: "worker", value: "<name>", help: 'Worker name (default: "name" in the wrangler config)' },
   { name: "project-ref", value: "<ref>", help: "Production project ref (default: swp.config.json)" },
   { name: "trunk", value: "<branch>", help: "Branch the shared database tracks (default: swp.config.json)" },
@@ -280,7 +280,7 @@ export function resolveInvocation(argv: string[], s: Style = makeStyle(false)): 
     const flag = c.flags.find((f) => f.name === key);
     if (!flag) {
       const elsewhere = ALL_FLAGS.some((f) => f.name === key);
-      const guess = didYouMean(key, known);
+      const guess = key === "env-file" ? "dotenv" : didYouMean(key, known);
       return usageError(
         elsewhere
           ? `${c.name} does not take --${key}.`

@@ -72,9 +72,9 @@ async function main(argv: string[]): Promise<number> {
   const { command, flags } = invocation;
   const dryRun = flags["dry-run"] === true;
 
-  const envFile = str(flags["env-file"]) ?? (existsSync(".env.swp") ? ".env.swp" : undefined);
+  const envFile = str(flags.dotenv) ?? (existsSync(".env.swp") ? ".env.swp" : undefined);
   if (envFile) {
-    if (!existsSync(envFile)) throw new Error(`--env-file ${envFile}: no such file`);
+    if (!existsSync(envFile)) throw new Error(`--dotenv ${envFile}: no such file`);
     process.loadEnvFile(envFile);
   }
 

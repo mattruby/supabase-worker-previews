@@ -63,6 +63,7 @@ describe("resolveInvocation", () => {
   it("refuses unknown flags, suggesting the one meant", () => {
     expect(error("shared", "--dry-rn")).toMatch(/^Unknown flag --dry-rn. Did you mean --dry-run\?/);
     expect(error("init", "--hlp")).toMatch(/Did you mean --help\?/);
+    expect(error("doctor", "--env-file", "x")).toMatch(/Unknown flag --env-file. Did you mean --dotenv\?/);
     expect(error("prune", "--isolated")).toMatch(/^prune does not take --isolated/);
   });
 
@@ -90,7 +91,7 @@ describe("resolveInvocation", () => {
 
 describe("parseArgs", () => {
   it("keeps everything after the first = in a value", () => {
-    expect(parseArgs(["--env-file=a=b"]).flags).toEqual({ "env-file": "a=b" });
+    expect(parseArgs(["--dotenv=a=b"]).flags).toEqual({ dotenv: "a=b" });
   });
 
   it("never lets a boolean flag take the next argument", () => {

@@ -24,13 +24,13 @@ Reference for every command, flag, environment variable and config field, the wr
 
 ### Flags for every command
 
-| Flag                  | Effect                                                                        |
-| --------------------- | ----------------------------------------------------------------------------- |
-| `--dry-run`           | Print the wrangler commands and API writes instead of making them             |
-| `--env-file <path>`   | Load environment variables from this file (default `.env.swp` when it exists) |
-| `--worker <name>`     | Overrides `worker` in `swp.config.json`                                       |
-| `--project-ref <ref>` | Overrides `supabaseProjectRef`                                                |
-| `--trunk <branch>`    | Overrides `trunk`                                                             |
+| Flag                  | Effect                                                                                                                            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `--dry-run`           | Print the wrangler commands and API writes instead of making them                                                                 |
+| `--dotenv <path>`     | Load environment variables from this file (default `.env.swp` when it exists). Not `--env-file`: Node claims that flag for itself |
+| `--worker <name>`     | Overrides `worker` in `swp.config.json`                                                                                           |
+| `--project-ref <ref>` | Overrides `supabaseProjectRef`                                                                                                    |
+| `--trunk <branch>`    | Overrides `trunk`                                                                                                                 |
 
 `swp pr` also takes `--no-comment` and `--no-deployments`.
 

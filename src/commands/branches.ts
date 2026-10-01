@@ -129,15 +129,23 @@ export async function shared(deps: Deps): Promise<string> {
  */
 export async function up(gitBranch: string, deps: Deps, pr?: number): Promise<string> {
   const { config, runner, supabase } = deps;
+  if (gitBranch === config.trunk)
+    throw new Error(
+      `${gitBranch} is the trunk; its Preview uses the shared "${config.sharedBranch}" database, which up must not repoint.`,
+    );
   runner.log(`Isolated database for ${gitBranch}`);
   if (runner.dryRun) {
     runner.log(`  find or create the Supabase branch for ${gitBranch}, wait for its migrations`);
     runner.log(`  set ${OVERRIDE_SECRET} on the Preview of ${gitBranch}`);
     return `<${gitBranch}>`;
   }
+  const found = await branchFor(gitBranch, deps);
+  if (found?.persistent)
+    throw new Error(
+      `Supabase branch "${found.name}" is persistent; up only uses a branch database of its own.`,
+    );
   const branch =
-    (await branchFor(gitBranch, deps)) ??
-    (await supabase.createBranch(config.supabaseProjectRef, { name: gitBranch, gitBranch }));
+    found ?? (await supabase.createBranch(config.supabaseProjectRef, { name: gitBranch, gitBranch }));
   assertIsolated(branch, config.supabaseProjectRef);
   const ref = branch.project_ref;
   await waitForMigrations(ref, deps);

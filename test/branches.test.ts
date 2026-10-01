@@ -176,6 +176,18 @@ describe("up", () => {
     ]);
   });
 
+  it("refuses the trunk and any persistent branch, which up must never repoint", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    await expect(up("main", deps(s.supabase, fakeCloudflare().cloudflare))).rejects.toThrow(/is the trunk/);
+    const tracked: Branch = { ...sharedBranch, name: "staging", git_branch: "staging" };
+    const s2 = fakeSupabase([main, tracked]);
+    await expect(
+      up("staging", deps(s2.supabase, fakeCloudflare([record("staging")]).cloudflare)),
+    ).rejects.toThrow(/is persistent/);
+    expect(s.log.redirects).toEqual([]);
+    expect(s2.log.redirects).toEqual([]);
+  });
+
   it("reuses the branch the GitHub integration already made", async () => {
     const own: Branch = {
       id: "2",

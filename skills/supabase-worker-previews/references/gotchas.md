@@ -10,7 +10,7 @@ Observed on real Cloudflare and Supabase Pro accounts in September 2026, with wr
 | GitHub integration (PR touching `supabase/`, or the API with `git_branch` once linked) | Runs the repo's migrations from that git branch, then `seed.sql`, then applies `config.toml`     | Whatever the migrations grant                                         |
 
 - With the default-privileges migration first, an integration-made branch matched production object for object (0 ACL differences across ~190 objects).
-- The first branch created on a never-branched project either relabels the project itself as that branch, or creates a real database and renames the project's branch `main`. Both were seen on different projects. `swp shared` creates a throwaway first branch so a real one is never mistaken for production.
+- The first branch created on a never-branched project either relabels the project itself as that branch, or creates a real database and renames the project's branch `main`. Both were seen on different projects. So `swp shared` refuses a project without branching instead of creating its first branch; connecting the Supabase GitHub integration with automatic branching on enables it.
 - `GET /v1/branches/{ref}` 404s for several seconds after creation.
 - Branch status reaches `FUNCTIONS_DEPLOYED` before the migrations finish. `swp` waits until `supabase_migrations.schema_migrations` holds as many rows as there are local migration files.
 - When a PR closes, the GitHub integration deletes its branch database, usually before the PR's own close workflow looks for it (measured: `swp down` found nothing left to delete). Decide what to report from whether the PR needed its own database, not from what remains.

@@ -1,6 +1,6 @@
 # Quickstart
 
-From an existing Worker and Supabase project to the first PR whose Preview runs on the right database. Allow about ten minutes of your time plus Supabase's branch creation time.
+Take an existing Worker and Supabase project to the first PR whose Preview runs on the right database. Allow about ten minutes of your time, plus a few minutes while Supabase creates branches. New to Worker Previews or Supabase branching? Read [Concepts](concepts.md) first.
 
 ## Before you start
 
@@ -24,7 +24,7 @@ The project ref is the subdomain of your project URL (`https://<ref>.supabase.co
 
 Expected output, in a repo that already has migrations:
 
-```
+```text
 + swp.config.json
 + supabase/migrations/20260913235959_api_default_privileges.sql
   It is dated before your existing migrations. Production has not run it: apply it with
@@ -113,7 +113,7 @@ npx swp shared
 
 Expected output:
 
-```
+```text
 Shared Preview database "preview" on <prod ref>, tracking main
   $ npx wrangler preview base-config secret bulk --worker-name my-app
 Done: <preview ref>. Put these in the wrangler config under previews.vars:
@@ -150,7 +150,7 @@ const { supabaseUrl, supabaseKey } = readPublicConfig() ?? {
 export const supabase = createClient(supabaseUrl, supabaseKey);
 ```
 
-On the server, read Supabase settings from the handler's `env` (or `process.env` under `nodejs_compat`), never from `import { env } from "cloudflare:workers"`. The [framework guides](frameworks/) show where the entry lives for TanStack Start, Hono, React Router and Astro.
+On the server, read Supabase settings from the handler's `env` (or `process.env` under `nodejs_compat`), never from `import { env } from "cloudflare:workers"`. The [framework guides](README.md#frameworks) show where the entry lives for TanStack Start, Hono, React Router and Astro.
 
 ## 6. Check the setup
 
@@ -160,7 +160,7 @@ npx swp doctor
 
 Expected output when everything is in place:
 
-```
+```text
 ✓ wrangler 4.145.0
 ✓ previews.vars uses <preview ref>
 ✓ 20260913235959_api_default_privileges.sql grants the API roles default privileges
@@ -168,7 +168,7 @@ Expected output when everything is in place:
 ✓ "preview" (<preview ref>) tracks main
 ```
 
-`✗` lines fail the command; `!` lines are warnings. The GitHub line comes from the branch's Supabase action runs; if none of them came from GitHub yet, doctor warns `cannot confirm the Supabase GitHub integration` (see [troubleshooting](troubleshooting.md#preview-403s-on-signed-in-reads)). If your assets directory holds HTML and `assets.run_worker_first` is unset, doctor warns that those pages would get no Supabase config. Without `SUPABASE_ACCESS_TOKEN` it prints `! SUPABASE_ACCESS_TOKEN not set; skipped the online checks` and checks only the local files.
+`✗` lines fail the command; `!` lines are warnings. The GitHub line comes from the branch's Supabase action runs; if none of them came from GitHub yet, doctor warns `cannot confirm the Supabase GitHub integration` (see [troubleshooting](troubleshooting.md#signed-in-reads-fail-with-403-or-permission-denied)). If your assets directory holds HTML and `assets.run_worker_first` is unset, doctor warns that those pages would get no Supabase config. Without `SUPABASE_ACCESS_TOKEN` it prints `! SUPABASE_ACCESS_TOKEN not set; skipped the online checks` and checks only the local files.
 
 ## 7. Turn on Preview builds
 
@@ -211,9 +211,9 @@ Commit `previews.vars`, the wrapped Worker and `config.toml`, and push to the tr
 
 ## 9. Open a PR
 
-**A PR that does not touch `supabase/`.** Workers Builds deploys its Preview with `previews.vars`, so it runs on the shared database. The "Preview database" check logs:
+**A PR that does not touch `supabase/`.** Workers Builds deploys its Preview with `previews.vars`, so it runs on the shared Preview database. The "Preview database" check logs:
 
-```
+```text
 PR #12 (feat/header): the shared "preview" database
   $ npx wrangler preview secret list --name feat/header --json --worker-name my-app
   Preview feat-header runs on preview (<preview ref>)
@@ -221,7 +221,7 @@ PR #12 (feat/header): the shared "preview" database
 
 **A PR that changes `supabase/`** (or carries the `isolated-db` label). The integration creates a branch database, migrates and seeds it from the PR, and `swp pr` points the Preview at it:
 
-```
+```text
 PR #13 (feat/notes): its own database
 Isolated database for feat/notes
   $ npx wrangler preview secret bulk --name feat/notes --worker-name my-app
@@ -229,7 +229,7 @@ Done: https://feat-notes-my-app.<subdomain>.workers.dev now runs on <branch ref>
   Preview feat-notes runs on feat/notes (<branch ref>)
 ```
 
-While Workers Builds is still creating the Preview, `up` logs `waiting for the Preview feat/notes to exist (n)`. `check` retries for up to 15 minutes while it waits for the right database.
+While Workers Builds is still creating the Preview, `up` logs `waiting for the Preview feat/notes to be deployed (n)`. `check` retries for up to 15 minutes while it waits for the right database.
 
 The `secret list` call is how a shared-database PR checks for a leftover override: if the PR once had its own database (the label was removed, or the `supabase/` change reverted), `swp pr` deletes `SUPABASE_OVERRIDE` from the Preview and then the Supabase branch `up` made for it.
 
@@ -240,3 +240,9 @@ Closing the PR runs `swp down`: it deletes the PR's Supabase branch if the integ
 PRs from forks are skipped with a `::notice::` and exit 0: GitHub gives them no secrets, so `swp` neither points nor checks anything for them.
 
 Open the Preview URL and **sign in with a real browser**. A green check proves which database the page reads; signing in proves the grants and redirect URLs. If either fails, see [troubleshooting](troubleshooting.md).
+
+Your first PR Preview is working. Next, read the guide for your [framework](README.md#frameworks), or keep [Troubleshooting](troubleshooting.md) handy.
+
+---
+
+[← Previous: Concepts](concepts.md) · [Docs index](README.md) · [Next: TanStack Start →](frameworks/tanstack-start.md)

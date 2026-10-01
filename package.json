@@ -3,37 +3,67 @@
   "version": "0.1.0",
   "description": "Branch previews for Cloudflare Workers on Supabase branching: every git branch gets a Worker Preview, and every PR that changes the schema gets its own Supabase database.",
   "license": "MIT",
+  "author": "Matt Ruby",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mattruby/supabase-worker-previews.git"
+  },
+  "homepage": "https://github.com/mattruby/supabase-worker-previews#readme",
+  "bugs": {
+    "url": "https://github.com/mattruby/supabase-worker-previews/issues"
+  },
   "type": "module",
   "keywords": [
     "cloudflare",
+    "cloudflare-workers",
     "workers",
     "wrangler",
     "supabase",
+    "supabase-branching",
     "branching",
     "preview",
-    "preview-deployments"
+    "preview-deployments",
+    "branch-preview",
+    "database",
+    "postgres",
+    "ci",
+    "github-actions",
+    "cli"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.0.0"
   },
   "bin": {
     "swp": "dist/cli.js"
   },
+  "main": "./dist/runtime.js",
+  "types": "./dist/runtime.d.ts",
   "exports": {
     ".": {
       "types": "./dist/runtime.d.ts",
       "default": "./dist/runtime.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "templates",
-    "!dist/**/*.test.*"
+    "templates"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:package": "node scripts/check-package.mjs",
+    "changeset": "changeset",
+    "version-packages": "changeset version && node scripts/sync-plugin-version.mjs && npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
     "prepare": "npm run build"
   },
   "peerDependencies": {
@@ -45,8 +75,13 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@changesets/cli": "^3.0.3",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.4",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
     "typescript": "^5.9.0",
+    "typescript-eslint": "^8.71.0",
     "vitest": "^4.0.0"
   }
 }

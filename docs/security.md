@@ -2,30 +2,29 @@
 
 ## What `swp` touches
 
-| System                      | Reads                                                                            | Writes                                                                                                                                                                                                                                                                                          |
-| --------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Supabase production project | the project record, its branch list                                              | no SQL, keys or auth settings. Branches are created through its `POST /v1/projects/{ref}/branches` endpoint. On a project that has never branched, `shared` first creates and deletes a throwaway branch named `production`, which can relabel the project's own default branch as `production` |
-| Supabase branch databases   | status, `supabase_migrations.schema_migrations` row count, API keys, auth config | create and update the shared branch (`shared`); create a PR branch when the integration has not (`up`); set Site URL and add redirect URLs (`shared`, `up`); delete a non-persistent PR branch (`down`)                                                                                         |
-| Cloudflare                  | the account's `workers.dev` subdomain, the Worker's Previews list                | the Preview base config secret `SUPABASE_SERVICE_ROLE_KEY` (`shared`); the `SUPABASE_OVERRIDE` secret on one Preview (`up`); delete one Preview (`down`)                                                                                                                                        |
-| GitHub                      | the PR's changed files                                                           | nothing                                                                                                                                                                                                                                                                                         |
-| Your repo                   | `swp.config.json`, the wrangler config, `supabase/`                              | `swp init` only, and it never overwrites a file                                                                                                                                                                                                                                                 |
+| System                      | Reads                                                                                         | Writes                                                                                                                                                                                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Supabase production project | the project record, its branch list                                                           | no SQL, keys, auth settings or branch record. New branches are created through its `POST /v1/projects/{ref}/branches` endpoint; `shared` refuses a project that has no branching instead of creating its first branch                           |
+| Supabase branch databases   | status, `supabase_migrations.schema_migrations` row count, API keys, auth config, action runs | create and update the shared branch (`shared`); create a PR branch when the integration has not (`up`); set Site URL and add redirect URLs (`shared`, `up`); delete a PR's own branch (`down`, `pr` when it is no longer needed, `prune --yes`) |
+| Cloudflare                  | the account's `workers.dev` subdomain, the Worker's Previews list, a Preview's secret names   | the Preview base config secret `SUPABASE_SERVICE_ROLE_KEY` (`shared`); set (`up`) or delete (`pr`) the `SUPABASE_OVERRIDE` secret on one Preview; delete Previews (`down`, `prune --yes`)                                                       |
+| GitHub                      | the PR's changed files, its comments, deployments; for `prune`, the repo's branches and PRs   | one status comment per PR (`pr`); deployments and deployment statuses in the `Preview` environment (`pr`)                                                                                                                                       |
+| Your repo                   | `swp.config.json`, the wrangler config, `supabase/`                                           | `swp init` only, and it never overwrites a file                                                                                                                                                                                                 |
 
-`swp` never deploys code, never touches the production Worker's secrets or vars, and never runs SQL on, reads the keys of, or changes the auth settings of the production project.
-
-<!-- TODO(pr-comment): add the PR comment write to the GitHub row once merged. -->
-<!-- TODO(github-deployments): add Deployments writes to the GitHub row once merged. -->
-<!-- TODO(prune): add what `swp prune` deletes once merged. -->
+`swp` never deploys code, never touches the production Worker's secrets or vars, never writes to the production project's branch record, and never runs SQL on, reads the keys of, or changes the auth settings of the production project.
 
 ## Guards
 
 Enforced in code:
 
-- **Production is never a branch target.** `assertIsolated` refuses any branch record that is the default branch or whose ref equals `supabaseProjectRef`, before `shared`, `up`, `check` or `down` acts on it: `Supabase branch "<name>" is the production project <ref> itself; refusing to touch it`.
-- **Persistent branches are never deleted.** `down` skips a branch marked persistent, including the shared `preview` branch.
+- **Production is never a branch target.** `assertIsolated` refuses any branch record that is the default branch or whose ref equals `supabaseProjectRef`, before `shared`, `up`, `check`, `down`, `release` (in `swp pr`) or `prune` acts on it: `Supabase branch "<name>" is the production project <ref> itself; refusing to touch it`.
+- **Persistent branches are never deleted.** `down` skips a branch marked persistent, including the shared `preview` branch. When `swp pr` drops a database a PR no longer needs, and in `prune`, a branch must also not be the shared branch or track the trunk.
+- **No first branch on production.** `shared` refuses a project without branching (`Branching is not enabled on <ref>. ...`) rather than creating its first branch, which was seen to relabel the production project's own branch record.
+- **Prune plans first.** `prune` only lists leftovers until you pass `--yes`, never deletes in `--dry-run`, and never deletes the trunk's Preview.
+- **Masked keys are refused.** If the token cannot reveal secret keys, `swp` stops instead of writing a masked key into a Preview.
 - **Production fails the check at once.** If a Preview serves the production ref, `check` throws without retrying.
 - **Secrets stay out of committed config.** `doctor` fails if `previews.vars` contains `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_OVERRIDE`, or points at the production ref.
 - **A broken override fails loudly.** A `SUPABASE_OVERRIDE` missing any of its four values throws instead of falling back to another database.
-- **Dry runs.** Every command takes `--dry-run` and prints the wrangler commands and writes it would make.
+- **Dry runs.** Every command takes `--dry-run` and prints the wrangler commands and writes it would make. `swp pr` writes no comment or deployment in a dry run.
 
 These guards protect against `swp` mistakes. They do not limit what the tokens themselves can do.
 
@@ -65,14 +64,12 @@ A classic (legacy) token is worse: every organization you belong to, with every 
 
 Restrict it to one account. Cloudflare tokens can also be limited by client IP and expiry, but GitHub-hosted runners have no fixed IP.
 
-**`GITHUB_TOKEN`**: issued per job by GitHub, read-only for contents and pull requests, expires when the job ends.
+**`GITHUB_TOKEN`**: issued per job by GitHub and expires when the job ends. The `swp pr` templates grant `contents: read`, `pull-requests: write` and `deployments: write`, so a misuse could edit PR comments or create deployments in this repository, nothing more.
 
 ## Fork PRs
 
-GitHub does not pass repository secrets to `pull_request` workflows from forks ([GitHub: using secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)), so the template workflow cannot leak your tokens to a fork's code; `swp pr` fails there with `Missing SUPABASE_ACCESS_TOKEN in the environment`. Do not switch the workflow to `pull_request_target` to make fork PRs work: that runs with your secrets on a checkout of untrusted code.
-
-<!-- TODO(fork-prs): describe fork-PR skipping once merged. -->
+GitHub does not pass repository secrets to `pull_request` workflows from forks ([GitHub: using secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)), so the template workflow cannot leak your tokens to a fork's code. `swp pr` skips fork PRs (head repository differs from the base, or was deleted) with a `::notice::`, and runs with any secret empty with a `::warning::`, both before it creates any API client; the job exits 0. Do not switch the workflow to `pull_request_target` to make fork PRs work: that runs with your secrets on a checkout of untrusted code.
 
 ## Reporting a vulnerability
 
-Open a [GitHub security advisory](https://github.com/mattruby/supabase-worker-previews/security/advisories/new) on the repository rather than a public issue.
+See [SECURITY.md](../SECURITY.md). Open a [GitHub security advisory](https://github.com/mattruby/supabase-worker-previews/security/advisories/new) on the repository rather than a public issue.

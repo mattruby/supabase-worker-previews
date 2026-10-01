@@ -1,7 +1,7 @@
 import { apiErrorMessage } from "./http.js";
 
 export type DeploymentState = "in_progress" | "success" | "failure" | "error" | "inactive";
-type Comment = { id: number; body?: string };
+type Comment = { id: number; body?: string; user?: { type?: string } | null };
 export type Deployment = { id: number; payload?: unknown };
 
 export class GitHubApi {
@@ -40,10 +40,13 @@ export class GitHubApi {
     }
   }
 
-  /** The id of the first comment on the issue or PR whose body starts with `marker`. */
+  /**
+   * The id of the first bot comment on the issue or PR whose body starts with `marker`. Anyone can
+   * comment on a public PR, so a person's comment that copies the marker must never be taken over.
+   */
   async findComment(issue: number, marker: string): Promise<number | undefined> {
     const comments = await this.all<Comment>(`/issues/${issue}/comments`);
-    return comments.find((c) => c.body?.startsWith(marker))?.id;
+    return comments.find((c) => c.user?.type === "Bot" && c.body?.startsWith(marker))?.id;
   }
 
   async createComment(issue: number, body: string): Promise<number> {

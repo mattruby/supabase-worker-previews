@@ -1,0 +1,69 @@
+name: Bug report
+description: swp or the runtime did something wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please remove tokens, API keys, service role keys and anything else secret before posting; this issue is public. Suspected security problems go through [private vulnerability reporting](https://github.com/mattruby/supabase-worker-previews/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what happened instead. Include the full command and its output.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The smallest setup that shows the problem.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`swp doctor` output"
+      description: Run `npx swp doctor` in the project (with SUPABASE_ACCESS_TOKEN set if you can, for the online checks) and paste the output. Remove secrets first.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: swp-version
+    attributes:
+      label: supabase-worker-previews version
+      placeholder: "npm ls supabase-worker-previews"
+    validations:
+      required: true
+  - type: input
+    id: wrangler-version
+    attributes:
+      label: wrangler version
+      placeholder: "npx wrangler --version"
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      placeholder: "node --version"
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it run
+      multiple: true
+      options:
+        - Locally
+        - GitHub Actions (swp pr)
+        - Workers Builds
+        - In the deployed Worker (runtime)
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Workflow logs, the relevant part of the wrangler config (secrets removed), links to the Preview or PR.

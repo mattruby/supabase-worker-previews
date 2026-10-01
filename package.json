@@ -1,6 +1,6 @@
 {
   "name": "supabase-worker-previews",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Branch previews for Cloudflare Workers on Supabase branching: every git branch gets a Worker Preview, and every PR that changes the schema gets its own Supabase database.",
   "license": "MIT",
   "author": "Matt Ruby",

@@ -471,12 +471,23 @@ describe("previewName pr", () => {
 });
 
 describe("matchPreview", () => {
-  it("finds a Preview by its git branch name or by slug", () => {
+  it("finds a Preview by its exact git branch name", () => {
     expect(matchPreview([record("docs/promote-trigger")], "docs/promote-trigger")?.slug).toBe(
       "docs-promote-trigger",
     );
-    expect(matchPreview([{ ...record("x"), name: "feat-y", slug: "feat-y" }], "feat/y")?.name).toBe("feat-y");
     expect(matchPreview([record("feat/x")], "feat/z")).toBeUndefined();
+  });
+
+  it("never matches another branch's Preview through a shared slug", () => {
+    expect(matchPreview([record("feat/x")], "feat-x")).toBeUndefined();
+    expect(matchPreview([record("feat/x")], "Feat/X")).toBeUndefined();
+  });
+
+  it("down for a branch that shares a slug leaves the other branch's Preview alone", async () => {
+    const s = fakeSupabase([main, sharedBranch]);
+    const c = fakeCloudflare([record("feat/x")]);
+    await down("feat-x", deps(s.supabase, c.cloudflare));
+    expect(c.calls.deleted).toEqual([]);
   });
 });
 

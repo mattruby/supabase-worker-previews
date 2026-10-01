@@ -1,0 +1,7 @@
+{
+  "name": "supabase-worker-previews",
+  "version": "0.1.0",
+  "description": "Branch previews for Cloudflare Workers on Supabase branching: the platform facts, setup and debugging playbook for the swp CLI.",
+  "license": "MIT",
+  "keywords": ["cloudflare", "workers", "supabase", "previews"]
+}

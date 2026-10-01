@@ -1,0 +1,52 @@
+{
+  "name": "supabase-worker-previews",
+  "version": "0.1.0",
+  "description": "Branch previews for Cloudflare Workers on Supabase branching: every git branch gets a Worker Preview, and every PR that changes the schema gets its own Supabase database.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "wrangler",
+    "supabase",
+    "branching",
+    "preview",
+    "preview-deployments"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "swp": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/runtime.d.ts",
+      "default": "./dist/runtime.js"
+    }
+  },
+  "files": [
+    "dist",
+    "templates",
+    "!dist/**/*.test.*"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepare": "npm run build"
+  },
+  "peerDependencies": {
+    "wrangler": ">=4.135.0"
+  },
+  "peerDependenciesMeta": {
+    "wrangler": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

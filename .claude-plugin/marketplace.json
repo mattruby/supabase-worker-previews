@@ -1,0 +1,11 @@
+{
+  "name": "supabase-worker-previews",
+  "owner": { "name": "supabase-worker-previews maintainers" },
+  "plugins": [
+    {
+      "name": "supabase-worker-previews",
+      "source": "./",
+      "description": "Branch previews for Cloudflare Workers on Supabase branching."
+    }
+  ]
+}

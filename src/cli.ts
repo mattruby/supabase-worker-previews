@@ -6,7 +6,7 @@ import { loadConfig, migrationFiles, type Config } from "./config.js";
 import { check, down, shared, up, type Deps } from "./commands/branches.js";
 import { checkLocal, checkRemote, type Finding } from "./commands/doctor.js";
 import { init } from "./commands/init.js";
-import { pr, readEvent } from "./commands/pr.js";
+import { annotation, pr, readEvent, skipReason } from "./commands/pr.js";
 import { makeRunner, parseArgs, sleep } from "./run.js";
 import { SupabaseApi } from "./supabase.js";
 
@@ -82,6 +82,13 @@ async function main(argv: string[]): Promise<number> {
     return pass ? 0 : 1;
   }
 
+  const event = command === "pr" ? readEvent() : undefined;
+  const skip = event && skipReason(event);
+  if (skip) {
+    console.log(annotation(skip));
+    return 0;
+  }
+
   const dryRun = flags["dry-run"] === true;
   const runner = makeRunner(dryRun);
   const deps: Deps = {
@@ -112,7 +119,7 @@ async function main(argv: string[]): Promise<number> {
       await down(currentBranch(flags.branch), deps, prNumber(flags.pr));
       return 0;
     case "pr":
-      await pr(readEvent(), { ...deps, githubToken: env("GITHUB_TOKEN") });
+      await pr(event!, { ...deps, githubToken: env("GITHUB_TOKEN") });
       return 0;
     default:
       console.error(`Unknown command "${command}"\n\n${USAGE}`);

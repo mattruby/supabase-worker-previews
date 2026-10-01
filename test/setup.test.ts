@@ -6,7 +6,7 @@ import { loadConfig, type Config } from "../src/config.js";
 import { checkLocal, checkRemote, compareVersions, hasDefaultPrivileges } from "../src/commands/doctor.js";
 import type { ActionRun, Branch, SupabaseApi } from "../src/supabase.js";
 import { init, timestampBefore } from "../src/commands/init.js";
-import { needsIsolatedDb, type PullRequestEvent } from "../src/commands/pr.js";
+import { annotation, needsIsolatedDb, skipReason, type PullRequestEvent } from "../src/commands/pr.js";
 import { parseJsonc } from "../src/jsonc.js";
 import { previewName } from "../src/preview-name.js";
 
@@ -302,5 +302,49 @@ describe("needsIsolatedDb", () => {
     expect(needsIsolatedDb(event([]), ["supabase/migrations/1.sql"], config)).toBe(true);
     expect(needsIsolatedDb(event([]), ["supabase-docs/readme.md"], config)).toBe(false);
     expect(needsIsolatedDb(event(["isolated-db"]), [], config)).toBe(true);
+  });
+});
+
+describe("skipReason", () => {
+  const env = {
+    SUPABASE_ACCESS_TOKEN: "s",
+    CLOUDFLARE_API_TOKEN: "c",
+    CLOUDFLARE_ACCOUNT_ID: "a",
+    GITHUB_TOKEN: "g",
+  };
+  const event = (repo?: { full_name: string } | null): PullRequestEvent => ({
+    action: "opened",
+    number: 3,
+    pull_request: { head: { ref: "feat/x", ...(repo === undefined ? {} : { repo }) }, labels: [] },
+    repository: { full_name: "o/r" },
+  });
+
+  it("runs a same-repo PR with every secret", () => {
+    expect(skipReason(event({ full_name: "o/r" }), env)).toBeNull();
+    expect(skipReason(event(), env)).toBeNull();
+  });
+
+  it("skips a fork PR with a notice", () => {
+    expect(skipReason(event({ full_name: "someone/r" }), {})).toEqual({
+      level: "notice",
+      message: expect.stringMatching(/fork someone\/r.*no secrets/),
+    });
+    expect(skipReason(event(null), env)?.message).toMatch(/a deleted fork/);
+  });
+
+  it("skips with a warning naming the empty secrets", () => {
+    const skip = skipReason(event({ full_name: "o/r" }), {
+      ...env,
+      SUPABASE_ACCESS_TOKEN: "",
+      CLOUDFLARE_ACCOUNT_ID: undefined,
+    });
+    expect(skip).toEqual({
+      level: "warning",
+      message: expect.stringMatching(/SUPABASE_ACCESS_TOKEN, CLOUDFLARE_ACCOUNT_ID are empty/),
+    });
+  });
+
+  it("formats a single-line Actions annotation", () => {
+    expect(annotation({ level: "warning", message: "50% done\nnext" })).toBe("::warning::50%25 done%0Anext");
   });
 });

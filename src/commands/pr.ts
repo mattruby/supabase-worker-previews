@@ -5,7 +5,10 @@ import { check, down, release, up, type Deps } from "./branches.js";
 export type PullRequestEvent = {
   action: string;
   number: number;
-  pull_request: { head: { ref: string }; labels: { name: string }[] };
+  pull_request: {
+    head: { ref: string; repo?: { full_name: string } | null };
+    labels: { name: string }[];
+  };
   repository: { full_name: string };
 };
 
@@ -14,6 +17,39 @@ export function readEvent(path = process.env.GITHUB_EVENT_PATH): PullRequestEven
   const event = JSON.parse(readFileSync(path, "utf8")) as PullRequestEvent;
   if (!event.pull_request) throw new Error("`swp pr` needs a pull_request event");
   return event;
+}
+
+export const PR_ENV = [
+  "SUPABASE_ACCESS_TOKEN",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "GITHUB_TOKEN",
+];
+
+export type Skip = { level: "notice" | "warning"; message: string };
+
+/** A fork PR, or a run without its secrets, is skipped with a GitHub Actions annotation rather than failed. */
+export function skipReason(
+  event: PullRequestEvent,
+  env: Record<string, string | undefined> = process.env,
+): Skip | null {
+  const head = event.pull_request.head.repo;
+  if (head !== undefined && head?.full_name !== event.repository.full_name)
+    return {
+      level: "notice",
+      message: `swp pr skipped PR #${event.number}: it comes from ${head ? `the fork ${head.full_name}` : "a deleted fork"}, and GitHub Actions gives fork PRs no secrets`,
+    };
+  const missing = PR_ENV.filter((name) => !env[name]);
+  if (missing.length)
+    return {
+      level: "warning",
+      message: `swp pr skipped PR #${event.number}: ${missing.join(", ")} ${missing.length === 1 ? "is" : "are"} empty; add ${missing.length === 1 ? "it" : "them"} to the repository's Actions secrets`,
+    };
+  return null;
+}
+
+export function annotation(skip: Skip): string {
+  return `::${skip.level}::${skip.message.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`;
 }
 
 export async function changedFiles(

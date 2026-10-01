@@ -14,7 +14,7 @@ export type InitOptions = { supabaseProjectRef?: string; trunk?: string; log?: (
 export function timestampBefore(file: string): string {
   const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(file);
   if (!m) throw new Error(`${file} does not start with a YYYYMMDDHHMMSS timestamp`);
-  const [, y, mo, d, h, mi, s] = m.map(Number) as number[];
+  const [, y, mo, d, h, mi, s] = m.map<number>(Number);
   return stamp(new Date(Date.UTC(y!, mo! - 1, d, h, mi, s) - 1000));
 }
 

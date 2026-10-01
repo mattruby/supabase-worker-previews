@@ -120,6 +120,8 @@ export type PreviewOptions = {
 };
 
 type Handler<E> = {
+  // `any`, not `unknown`, so a handler can type its third argument as ExecutionContext.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fetch?: (request: Request, env: E, ctx: any) => Response | Promise<Response>;
   [key: string]: unknown;
 };

@@ -125,7 +125,7 @@ function deps(supabase: SupabaseApi, cloudflare: CloudflareApi, extra: Partial<D
     cloudflare,
     migrationCount: () => 3,
     sleep: async () => {},
-    fetchImpl: (async () => new Response("", { status: 404 })) as typeof fetch,
+    fetchImpl: async () => new Response("", { status: 404 }),
     ...extra,
   };
 }

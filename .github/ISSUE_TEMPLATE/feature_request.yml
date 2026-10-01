@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest something swp should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What you would like swp or the runtime to do.
+    validations:
+      required: true
+  - type: textarea
+    id: platform
+    attributes:
+      label: Platform behaviour it relies on
+      description: If the idea depends on how Supabase branching, Workers Previews or wrangler behave, say what you observed and how you checked it (command, versions, result).
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Workarounds you use now, or other approaches you considered.

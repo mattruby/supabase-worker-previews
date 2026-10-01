@@ -117,6 +117,21 @@ describe("doctor", () => {
     expect(levels(dir).filter((l) => !l.startsWith("ok"))).toEqual([]);
   });
 
+  it("warns when static HTML would be served without the Worker", () => {
+    const vars = { SUPABASE_URL: "https://sharedrefsharedref00.supabase.co", SUPABASE_PUBLISHABLE_KEY: "k" };
+    const files = (assets: object) => ({
+      "node_modules/wrangler/package.json": JSON.stringify({ version: "4.145.0" }),
+      "wrangler.json": wrangler({ vars }, { assets }),
+      "public/index.html": "<html><head></head></html>",
+      "supabase/migrations/20260101000000_grants.sql": GRANTS,
+    });
+    expect(levels(project(files({ directory: "public" }))).join("\n")).toMatch(
+      /warn: public has index.html; Cloudflare serves matching assets without running the Worker/,
+    );
+    const workerFirst = levels(project(files({ directory: "public", run_worker_first: true })));
+    expect(workerFirst.filter((l) => !l.startsWith("ok"))).toEqual([]);
+  });
+
   it("catches production in previews.vars, a secret in vars, a missing binding and a missing grants migration", () => {
     const dir = project({
       "node_modules/wrangler/package.json": JSON.stringify({ version: "4.131.0" }),

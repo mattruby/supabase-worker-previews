@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { migrationFiles, migrationsDir, readWranglerConfig, type Config } from "../config.js";
 import { projectRefOf } from "../runtime.js";
@@ -74,6 +74,14 @@ export function checkLocal(config: Config, cwd = process.cwd()): Finding[] {
       const topVars = Object.keys(wrangler.json.vars ?? {}).filter((k) => !(k in vars));
       if (topVars.length) warn(`vars missing from previews.vars: ${topVars.join(", ")}`);
     }
+    const assets = wrangler.json.assets as { directory?: string; run_worker_first?: unknown } | undefined;
+    const html = assets?.directory ? htmlFiles(join(cwd, assets.directory)) : [];
+    if (html.length && !assets?.run_worker_first)
+      warn(
+        `${assets!.directory} has ${html.join(", ")}; Cloudflare serves matching assets without running the Worker, ` +
+          "so those pages get no Supabase config and the browser falls back to build-time values. " +
+          'Set "run_worker_first" under "assets" (true, or the HTML routes)',
+      );
   }
 
   const migrations = migrationFiles(config, cwd);
@@ -182,6 +190,10 @@ async function githubFinding(
       "Branching without Git copies the schema without privileges, so signed-in reads 403. " +
       "Connect the repo under Integrations, GitHub; if it is connected, push to the trunk and run doctor again",
   };
+}
+
+function htmlFiles(dir: string): string[] {
+  return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith(".html")) : [];
 }
 
 function installedWranglerVersion(cwd: string): string | null {

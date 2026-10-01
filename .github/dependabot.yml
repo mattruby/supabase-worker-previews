@@ -6,8 +6,6 @@ updates:
       interval: weekly
     cooldown:
       default-days: 5
-    allow:
-      - dependency-type: development
     ignore:
       # Kept on the engines floor so the typecheck catches APIs newer than Node 22.
       - dependency-name: "@types/node"

@@ -13,7 +13,7 @@ console.log(`${path} -> ${version}`);
 // The action runs exactly this version when a project does not install the package, never a range.
 const action = "action.yml";
 const actionText = readFileSync(action, "utf8");
-const pinned = actionText.replace(/(\n  version:\n(?:    .*\n)*?    default: )"[^"]*"/, `$1"${version}"`);
+const pinned = actionText.replace(/(\n {2}version:\n(?: {4}.*\n)*? {4}default: )"[^"]*"/, `$1"${version}"`);
 if (!pinned.includes(`default: "${version}"`))
   throw new Error(`${action} has no version input default to update`);
 writeFileSync(action, pinned);
